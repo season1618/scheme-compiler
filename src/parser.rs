@@ -16,27 +16,27 @@ pub struct Defn {
     expr: Expr,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expr {
     Var(Var),
     Object(Object),
-    Call { proc: Lambda, params: Vec<Rc<Expr>> },
+    Call { proc: String, params: Vec<Rc<Expr>> },
     Cond { cond: Rc<Expr>, conseq: Rc<Expr>, alter: Rc<Expr> },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Var {
     ident: String,
     offset: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Object {
     Int(i32),
     Lambda(Lambda),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Lambda {
     args: Vec<String>,
     body: Vec<Rc<Node>>,
@@ -62,13 +62,26 @@ impl Parser {
     fn parse_program(&mut self) -> Vec<Node> {
         let mut node_list: Vec<Node> = Vec::new();
         while self.pos < self.token_list.len() {
-            node_list.push(self.parse_defn_or_expr());
+            node_list.push(self.parse_node());
         }
         println!("{:?}", node_list);
         node_list
     }
 
-    fn parse_defn_or_expr(&mut self) -> Node {
+    fn parse_node(&mut self) -> Node {
+        match self.token_list[self.pos] {
+            OpenPar => {
+                if self.expect("define") {
+                    panic!("");
+                }
+            },
+            _ => {},
+        }
+
+        Node::Expr(self.parse_expr())
+    }
+
+    fn parse_expr(&mut self) -> Expr {
         match self.token_list[self.pos] {
             Ident(ref ident) => {
                 self.pos += 1;
@@ -80,13 +93,22 @@ impl Parser {
             },
             Number(ref number) => {
                 self.pos += 1;
-                Node::Expr(Expr::Object(Int(*number)))
+                Expr::Object(Int(*number))
             },
             OpenPar => {
                 self.pos += 1;
-                panic!("");
-                // Node::Expr(self.expr())
-                
+
+                let mut proc = "1".to_string();
+
+                if self.expect("+") { proc = "plus".to_string(); }
+
+                let mut params: Vec<Rc<Expr>> = Vec::new();
+                while self.token_list[self.pos] != ClosePar {
+                    params.push(Rc::new(self.parse_expr()));
+                }
+                self.pos += 1;
+
+                Expr::Call { proc, params }
             },
             ClosePar => {
                 panic!("too much ')'");
@@ -95,5 +117,16 @@ impl Parser {
                 panic!("'.' is invalid");
             },
         }
+    }
+
+    fn expect(&mut self, name: &str) -> bool {
+        match self.token_list[self.pos] {
+            Ident(ref ident) if *ident == name => {
+                self.pos += 1;
+                return true;
+            },
+            _ => {},
+        }
+        return false;
     }
 }

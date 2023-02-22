@@ -21,14 +21,23 @@ impl CodeGen {
     fn gen_asm(&mut self, node_list: Vec<Node>) {
         writeln!(self.dest, ".intel_syntax noprefix");
         writeln!(self.dest, ".global main");
+
+        writeln!(self.dest, "plus:");
+        writeln!(self.dest, "    mov rax, 0");
+        writeln!(self.dest, "    add rax, QWORD PTR [rsp+8]");
+        writeln!(self.dest, "    add rax, QWORD PTR [rsp+16]");
+        writeln!(self.dest, "    ret");
+
         writeln!(self.dest, "main:");
         writeln!(self.dest, "    push rbp");
-        writeln!(self.dest, "    mov rbp rsp");
+        writeln!(self.dest, "    mov rbp, rsp");
 
         for node in node_list {
             self.gen_node(node);
         }
 
+        writeln!(self.dest, "    mov rsp, rbp");
+        writeln!(self.dest, "    pop rbp");
         writeln!(self.dest, "    ret");
     }
 
@@ -42,6 +51,12 @@ impl CodeGen {
     fn gen_expr(&mut self, expr: Expr) {
         match expr {
             Expr::Object(object) => self.gen_object(object),
+            Expr::Call { proc, params } => {
+                for param in params.into_iter().rev() {
+                    self.gen_expr((*param).clone());
+                }
+                writeln!(self.dest, "    call {}", proc);
+            },
             _ => {},
         }
     }
