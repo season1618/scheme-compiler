@@ -2,7 +2,6 @@ use std::rc::Rc;
 use crate::lexer::Token;
 use Token::*;
 // use Node::*;
-use Object::*;
 
 #[derive(Debug)]
 pub enum Node {
@@ -19,7 +18,8 @@ pub struct Defn {
 #[derive(Debug, Clone)]
 pub enum Expr {
     Var(Var),
-    Object(Object),
+    Int(i32),
+    Lambda { args: Vec<String>, body: Vec<Rc<Node>> },
     Call { proc: String, params: Vec<Rc<Expr>> },
     Cond { cond: Rc<Expr>, conseq: Rc<Expr>, alter: Rc<Expr> },
 }
@@ -28,18 +28,6 @@ pub enum Expr {
 pub struct Var {
     ident: String,
     offset: usize,
-}
-
-#[derive(Debug, Clone)]
-pub enum Object {
-    Int(i32),
-    Lambda(Lambda),
-}
-
-#[derive(Debug, Clone)]
-pub struct Lambda {
-    args: Vec<String>,
-    body: Vec<Rc<Node>>,
 }
 
 pub fn parse(token_list: Vec<Token>) -> Vec<Node> {
@@ -93,7 +81,7 @@ impl Parser {
             },
             Number(ref number) => {
                 self.pos += 1;
-                Expr::Object(Int(*number))
+                Expr::Int(*number)
             },
             OpenPar => {
                 self.pos += 1;
@@ -101,6 +89,7 @@ impl Parser {
                 let mut proc = "1".to_string();
 
                 if self.expect("+") { proc = "plus".to_string(); }
+                else if self.expect("*") { proc = "mul".to_string(); }
 
                 let mut params: Vec<Rc<Expr>> = Vec::new();
                 while self.token_list[self.pos] != ClosePar {
@@ -119,14 +108,58 @@ impl Parser {
         }
     }
 
+    fn parse_lambda(&mut self) -> String {
+        match self.token_list[self.pos] {
+            Ident(ref ident) => ident.clone(),
+            OpenPar => {
+                self.consume("lambda");
+
+                let mut args: Vec<String> = Vec::new();
+                self.consume("(");
+                while let Ident(ref ident) = self.token_list[self.pos] {
+                    args.push((*ident).clone());
+                    self.pos += 1;
+                }
+                self.consume(")");
+
+                let mut body: Vec<Rc<Node>> = Vec::new();
+                while let Node::Expr(expr) = self.parse_node() {
+                    body.push(Rc::new(Node::Expr(expr)));
+                }
+
+                // Expr::Lambda { args, body }
+                "0".to_string()
+            },
+            _ => { panic!(""); },
+        }
+    }
+
     fn expect(&mut self, name: &str) -> bool {
         match self.token_list[self.pos] {
             Ident(ref ident) if *ident == name => {
                 self.pos += 1;
-                return true;
+                true
             },
-            _ => {},
+            _ => {
+                false
+            },
         }
-        return false;
+    }
+
+    fn consume(&mut self, name: &str) {
+        match self.token_list[self.pos] {
+            Ident(ref ident) if *ident == name => {
+                self.pos += 1;
+            },
+            OpenPar if name == "(" => {
+                self.pos += 1;
+            },
+            ClosePar if name == ")" => {
+                self.pos += 1;
+            },
+            _ => {
+                println!("{} is unexpected", name);
+            }
+        }
     }
 }

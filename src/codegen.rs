@@ -1,7 +1,6 @@
 use std::fs::File;
 use std::io::Write;
 use crate::parser::*;
-use Object::*;
 
 pub fn gen_asm(node_list: Vec<Node>, dest_path: String) {
     CodeGen::new(dest_path).gen_asm(node_list);
@@ -50,21 +49,14 @@ impl CodeGen {
 
     fn gen_expr(&mut self, expr: Expr) {
         match expr {
-            Expr::Object(object) => self.gen_object(object),
+            Expr::Int(val) => {
+                writeln!(self.dest, "    push {}", val);
+            },
             Expr::Call { proc, params } => {
                 for param in params.into_iter().rev() {
                     self.gen_expr((*param).clone());
                 }
                 writeln!(self.dest, "    call {}", proc);
-            },
-            _ => {},
-        }
-    }
-
-    fn gen_object(&mut self, object: Object) {
-        match object {
-            Int(val) => {
-                writeln!(self.dest, "    push {}", val);
             },
             _ => {},
         }
