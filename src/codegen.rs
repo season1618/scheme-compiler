@@ -18,26 +18,46 @@ impl CodeGen {
     }
 
     fn gen_asm(&mut self, node_list: Vec<Node>) {
-        writeln!(self.dest, ".intel_syntax noprefix");
-        writeln!(self.dest, ".global main");
+        writeln!(self.dest, ".intel_syntax noprefix").unwrap();
+        writeln!(self.dest, ".global main").unwrap();
 
-        writeln!(self.dest, "plus:");
-        writeln!(self.dest, "    mov rax, 0");
-        writeln!(self.dest, "    add rax, QWORD PTR [rsp+8]");
-        writeln!(self.dest, "    add rax, QWORD PTR [rsp+16]");
-        writeln!(self.dest, "    ret");
+        writeln!(self.dest, "cons:").unwrap();
+        writeln!(self.dest, "    mov rdi, 2").unwrap();
+        writeln!(self.dest, "    mov rsi, 8").unwrap();
+        writeln!(self.dest, "    call calloc").unwrap();
+        writeln!(self.dest, "    mov rdi, QWORD PTR [rsp+8]").unwrap();
+        writeln!(self.dest, "    mov rsi, QWORD PTR [rsp+16]").unwrap();
+        writeln!(self.dest, "    mov QWORD PTR [rax], rdi").unwrap();
+        writeln!(self.dest, "    mov QWORD PTR [rax+8], rsi").unwrap();
+        writeln!(self.dest, "    ret").unwrap();
+        
+        writeln!(self.dest, "car:").unwrap();
+        writeln!(self.dest, "    mov rax, QWORD PTR [rsp+8]").unwrap();
+        writeln!(self.dest, "    mov rax, QWORD PTR [rax]").unwrap();
+        writeln!(self.dest, "    ret").unwrap();
+        
+        writeln!(self.dest, "cdr:").unwrap();
+        writeln!(self.dest, "    mov rax, QWORD PTR [rsp+8]").unwrap();
+        writeln!(self.dest, "    mov rax, QWORD PTR [rax+8]").unwrap();
+        writeln!(self.dest, "    ret").unwrap();
 
-        writeln!(self.dest, "main:");
-        writeln!(self.dest, "    push rbp");
-        writeln!(self.dest, "    mov rbp, rsp");
+        writeln!(self.dest, "plus:").unwrap();
+        writeln!(self.dest, "    mov rax, 0").unwrap();
+        writeln!(self.dest, "    add rax, QWORD PTR [rsp+8]").unwrap();
+        writeln!(self.dest, "    add rax, QWORD PTR [rsp+16]").unwrap();
+        writeln!(self.dest, "    ret").unwrap();
+
+        writeln!(self.dest, "main:").unwrap();
+        writeln!(self.dest, "    push rbp").unwrap();
+        writeln!(self.dest, "    mov rbp, rsp").unwrap();
 
         for node in node_list {
             self.gen_node(node);
         }
 
-        writeln!(self.dest, "    mov rsp, rbp");
-        writeln!(self.dest, "    pop rbp");
-        writeln!(self.dest, "    ret");
+        writeln!(self.dest, "    mov rsp, rbp").unwrap();
+        writeln!(self.dest, "    pop rbp").unwrap();
+        writeln!(self.dest, "    ret").unwrap();
     }
 
     fn gen_node(&mut self, node: Node) {
@@ -50,13 +70,13 @@ impl CodeGen {
     fn gen_expr(&mut self, expr: Expr) {
         match expr {
             Expr::Int(val) => {
-                writeln!(self.dest, "    push {}", val);
+                writeln!(self.dest, "    push {}", val).unwrap();
             },
             Expr::Call { proc, params } => {
                 for param in params.into_iter().rev() {
                     self.gen_expr((*param).clone());
                 }
-                writeln!(self.dest, "    call {}", proc);
+                writeln!(self.dest, "    call {}", proc).unwrap();
             },
             _ => {},
         }
