@@ -77,6 +77,7 @@ impl CodeGen {
                     self.gen_expr((*param).clone());
                 }
                 writeln!(self.dest, "    call {}", proc).unwrap();
+                writeln!(self.dest, "    push rax").unwrap();
             },
             _ => {},
         }

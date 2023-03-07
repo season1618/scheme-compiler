@@ -86,7 +86,7 @@ impl Parser {
             OpenPar => {
                 self.pos += 1;
 
-                let mut proc = "1".to_string();
+                let mut proc = self.parse_lambda();
 
                 if self.expect("+") { proc = "plus".to_string(); }
                 else if self.expect("*") { proc = "mul".to_string(); }
@@ -110,7 +110,10 @@ impl Parser {
 
     fn parse_lambda(&mut self) -> String {
         match self.token_list[self.pos] {
-            Ident(ref ident) => ident.clone(),
+            Ident(ref ident) => {
+                self.pos += 1;
+                ident.clone()
+            },
             OpenPar => {
                 self.consume("lambda");
 
