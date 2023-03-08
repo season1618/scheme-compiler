@@ -17,18 +17,13 @@ pub struct Defn {
 
 #[derive(Debug, Clone)]
 pub enum Expr {
-    Int(i32),
     Var(usize),
+    Bool(bool),
+    Int(i32),
     Proc(String),
     Lambda { args: Vec<String>, body: Vec<Rc<Node>> },
     Call { proc: String, params: Vec<Rc<Expr>> },
     Cond { cond: Rc<Expr>, conseq: Rc<Expr>, alter: Rc<Expr> },
-}
-
-#[derive(Debug, Clone)]
-pub struct Var {
-    pub name: String,
-    pub offset: usize,
 }
 
 pub fn parse(token_list: Vec<Token>) -> Vec<Node> {
@@ -52,7 +47,7 @@ impl Counter {
 
 #[derive(Debug)]
 struct Env {
-    vec: Vec<Var>,
+    vec: Vec<(String, usize)>,
 }
 
 impl Env {
@@ -61,13 +56,13 @@ impl Env {
     }
 
     fn push(&mut self, name: String, offset: usize) {
-        self.vec.push(Var { name, offset });
+        self.vec.push((name, offset));
     }
 
     fn find(&self, name: String) -> Option<usize> {
         for var in &self.vec {
-            if var.name == name {
-                return Some(var.offset);
+            if var.0 == name {
+                return Some(var.1);
             }
         }
         None
@@ -136,21 +131,27 @@ impl Parser {
         match self.token_list[self.pos] {
             Ident(ref ident) => {
                 self.pos += 1;
-                match self.env.find(ident.clone()) {
-                    Some(offset) => {
-                        return Expr::Var(offset);
-                    },
-                    None => {
-                        println!("varibale '{}' is undefined", ident);
-                    }
-                }
+                
                 if ident == "+" { return Expr::Proc("plus".to_string()); }
                 if ident == "*" { return Expr::Proc("mul".to_string()); }
-                Expr::Proc(ident.clone())
+
+                for std_proc in ["cons", "car", "cdr"] {
+                    if ident == std_proc {
+                        return Expr::Proc(ident.clone());
+                    }
+                }
+                
+                match self.env.find(ident.clone()) {
+                    Some(offset) => Expr::Var(offset),
+                    None => {
+                        println!("variable '{}' is undefined", ident);
+                        panic!("");
+                    }
+                }
             },
             Bool(ref value) => {
                 self.pos += 1;
-                panic!("  ");
+                Expr::Bool(*value)
             },
             Number(ref number) => {
                 self.pos += 1;
