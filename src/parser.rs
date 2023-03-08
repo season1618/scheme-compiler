@@ -19,6 +19,7 @@ pub struct Defn {
 pub enum Expr {
     Int(i32),
     Var(usize),
+    Proc(String),
     Lambda { args: Vec<String>, body: Vec<Rc<Node>> },
     Call { proc: String, params: Vec<Rc<Expr>> },
     Cond { cond: Rc<Expr>, conseq: Rc<Expr>, alter: Rc<Expr> },
@@ -76,7 +77,8 @@ impl Env {
 struct Parser {
     token_list: Vec<Token>,
     pos: usize,
-    counter: Counter,
+    var_cnt: Counter,
+    lambda_cnt: usize,
     env: Env,
 }
 
@@ -85,7 +87,8 @@ impl Parser {
         Parser {
             token_list: token_list,
             pos: 0,
-            counter: Counter::new(),
+            var_cnt: Counter::new(),
+            lambda_cnt: 0,
             env: Env::new(),
         }
     }
@@ -116,7 +119,7 @@ impl Parser {
             Ident(ref ident) => {
                 self.pos += 1;
                 let name = ident.clone();
-                let offset = self.counter.next();
+                let offset = self.var_cnt.next();
                 let expr = self.parse_expr();
                 self.consume(")");
 
@@ -133,16 +136,17 @@ impl Parser {
         match self.token_list[self.pos] {
             Ident(ref ident) => {
                 self.pos += 1;
-                println!("{:?}", self.env);
                 match self.env.find(ident.clone()) {
                     Some(offset) => {
-                        Expr::Var(offset)
+                        return Expr::Var(offset);
                     },
                     None => {
                         println!("varibale '{}' is undefined", ident);
-                        panic!("");
                     }
                 }
+                if ident == "+" { return Expr::Proc("plus".to_string()); }
+                if ident == "*" { return Expr::Proc("mul".to_string()); }
+                Expr::Proc(ident.clone())
             },
             Bool(ref value) => {
                 self.pos += 1;
@@ -155,18 +159,45 @@ impl Parser {
             OpenPar => {
                 self.pos += 1;
 
-                let mut proc = self.parse_lambda();
+                // match self.token_list[self.pos] {
+                //     Ident(ref ident) => {
+                //         self.pos += 1;
+                        
+                //     },
+                //     OpenPar => {
+                //         self.consume("lambda");
+        
+                //         let mut args: Vec<String> = Vec::new();
+                //         self.consume("(");
+                //         while let Ident(ref ident) = self.token_list[self.pos] {
+                //             args.push(ident.clone());
+                //             self.pos += 1;
+                //         }
+                //         self.consume(")");
+        
+                //         let mut body: Vec<Rc<Node>> = Vec::new();
+                //         while let Node::Expr(expr) = self.parse_node() {
+                //             body.push(Rc::new(Node::Expr(expr)));
+                //         }
+        
+                //         // Expr::Lambda { args, body }
+                //         self.lambda_cnt += 1;
+                //         (self.lambda_cnt - 1).to_string()
+                //     },
+                //     _ => { panic!(""); },
+                // }
 
-                if self.expect("+") { proc = "plus".to_string(); }
-                else if self.expect("*") { proc = "mul".to_string(); }
+                if let Expr::Proc(proc) = self.parse_expr() {
+                    let mut params: Vec<Rc<Expr>> = Vec::new();
+                    while self.token_list[self.pos] != ClosePar {
+                        params.push(Rc::new(self.parse_expr()));
+                    }
+                    self.pos += 1;
 
-                let mut params: Vec<Rc<Expr>> = Vec::new();
-                while self.token_list[self.pos] != ClosePar {
-                    params.push(Rc::new(self.parse_expr()));
+                    return Expr::Call { proc, params };
                 }
-                self.pos += 1;
 
-                Expr::Call { proc, params }
+                panic!("");
             },
             ClosePar => {
                 panic!("too much ')'");
@@ -174,35 +205,6 @@ impl Parser {
             Period => {
                 panic!("'.' is invalid");
             },
-        }
-    }
-
-    fn parse_lambda(&mut self) -> String {
-        match self.token_list[self.pos] {
-            Ident(ref ident) => {
-                self.pos += 1;
-                ident.clone()
-            },
-            OpenPar => {
-                self.consume("lambda");
-
-                let mut args: Vec<String> = Vec::new();
-                self.consume("(");
-                while let Ident(ref ident) = self.token_list[self.pos] {
-                    args.push((*ident).clone());
-                    self.pos += 1;
-                }
-                self.consume(")");
-
-                let mut body: Vec<Rc<Node>> = Vec::new();
-                while let Node::Expr(expr) = self.parse_node() {
-                    body.push(Rc::new(Node::Expr(expr)));
-                }
-
-                // Expr::Lambda { args, body }
-                "0".to_string()
-            },
-            _ => { panic!(""); },
         }
     }
 

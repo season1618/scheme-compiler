@@ -71,7 +71,7 @@ impl CodeGen {
     fn gen_defn(&mut self, defn: Defn) {
         self.gen_expr(defn.expr);
         writeln!(self.dest, "    pop rax").unwrap();
-        writeln!(self.dest, "    mov QWORD PTR [rbp-{}], rax", defn.offset);
+        writeln!(self.dest, "    mov QWORD PTR [rbp-{}], rax", defn.offset).unwrap();
     }
 
     fn gen_expr(&mut self, expr: Expr) {
@@ -80,7 +80,7 @@ impl CodeGen {
                 writeln!(self.dest, "    push {}", val).unwrap();
             },
             Expr::Var(offset) => {
-                writeln!(self.dest, "    push QWORD PTR [rbp-{}]", offset);
+                writeln!(self.dest, "    push QWORD PTR [rbp-{}]", offset).unwrap();
             },
             Expr::Call { proc, params } => {
                 for param in params.into_iter().rev() {
