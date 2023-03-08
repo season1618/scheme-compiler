@@ -50,6 +50,7 @@ impl CodeGen {
         writeln!(self.dest, "main:").unwrap();
         writeln!(self.dest, "    push rbp").unwrap();
         writeln!(self.dest, "    mov rbp, rsp").unwrap();
+        writeln!(self.dest, "    sub rsp, 200").unwrap();
 
         for node in node_list {
             self.gen_node(node);
@@ -62,15 +63,24 @@ impl CodeGen {
 
     fn gen_node(&mut self, node: Node) {
         match node {
-            Node::Defn(defn) => {},
+            Node::Defn(defn) => self.gen_defn(defn),
             Node::Expr(expr) => self.gen_expr(expr),
         }
+    }
+
+    fn gen_defn(&mut self, defn: Defn) {
+        self.gen_expr(defn.expr);
+        writeln!(self.dest, "    pop rax").unwrap();
+        writeln!(self.dest, "    mov QWORD PTR [rbp-{}], rax", defn.offset);
     }
 
     fn gen_expr(&mut self, expr: Expr) {
         match expr {
             Expr::Int(val) => {
                 writeln!(self.dest, "    push {}", val).unwrap();
+            },
+            Expr::Var(offset) => {
+                writeln!(self.dest, "    push QWORD PTR [rbp-{}]", offset);
             },
             Expr::Call { proc, params } => {
                 for param in params.into_iter().rev() {

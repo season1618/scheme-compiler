@@ -11,14 +11,14 @@ pub enum Node {
 
 #[derive(Debug)]
 pub struct Defn {
-    var: String,
-    expr: Expr,
+    pub offset: usize,
+    pub expr: Expr,
 }
 
 #[derive(Debug, Clone)]
 pub enum Expr {
-    Var(Var),
     Int(i32),
+    Var(usize),
     Lambda { args: Vec<String>, body: Vec<Rc<Node>> },
     Call { proc: String, params: Vec<Rc<Expr>> },
     Cond { cond: Rc<Expr>, conseq: Rc<Expr>, alter: Rc<Expr> },
@@ -26,17 +26,58 @@ pub enum Expr {
 
 #[derive(Debug, Clone)]
 pub struct Var {
-    ident: String,
-    offset: usize,
+    pub name: String,
+    pub offset: usize,
 }
 
 pub fn parse(token_list: Vec<Token>) -> Vec<Node> {
     Parser::new(token_list).parse_program()
 }
 
+struct Counter {
+    count: usize,
+}
+
+impl Counter {
+    fn new() -> Self {
+        Counter { count: 0 }
+    }
+
+    fn next(&mut self) -> usize {
+        self.count += 8;
+        self.count
+    }
+}
+
+#[derive(Debug)]
+struct Env {
+    vec: Vec<Var>,
+}
+
+impl Env {
+    fn new() -> Self {
+        Env { vec: Vec::new() }
+    }
+
+    fn push(&mut self, name: String, offset: usize) {
+        self.vec.push(Var { name, offset });
+    }
+
+    fn find(&self, name: String) -> Option<usize> {
+        for var in &self.vec {
+            if var.name == name {
+                return Some(var.offset);
+            }
+        }
+        None
+    }
+}
+
 struct Parser {
     token_list: Vec<Token>,
     pos: usize,
+    counter: Counter,
+    env: Env,
 }
 
 impl Parser {
@@ -44,6 +85,8 @@ impl Parser {
         Parser {
             token_list: token_list,
             pos: 0,
+            counter: Counter::new(),
+            env: Env::new(),
         }
     }
 
@@ -57,23 +100,49 @@ impl Parser {
     }
 
     fn parse_node(&mut self) -> Node {
-        match self.token_list[self.pos] {
-            OpenPar => {
-                if self.expect("define") {
-                    panic!("");
-                }
-            },
-            _ => {},
+        if self.expect("(") {
+            if self.expect("define") {
+                return Node::Defn(self.parse_defn());
+            } else {
+                self.pos -= 1;
+                return Node::Expr(self.parse_expr());
+            }
         }
+        panic!("");
+    }
 
-        Node::Expr(self.parse_expr())
+    fn parse_defn(&mut self) -> Defn {
+        match self.token_list[self.pos] {
+            Ident(ref ident) => {
+                self.pos += 1;
+                let name = ident.clone();
+                let offset = self.counter.next();
+                let expr = self.parse_expr();
+                self.consume(")");
+
+                self.env.push(name, offset);
+                Defn { offset, expr }
+            },
+            _ => {
+                panic!("not identifier.");
+            },
+        }
     }
 
     fn parse_expr(&mut self) -> Expr {
         match self.token_list[self.pos] {
             Ident(ref ident) => {
                 self.pos += 1;
-                panic!("not found");
+                println!("{:?}", self.env);
+                match self.env.find(ident.clone()) {
+                    Some(offset) => {
+                        Expr::Var(offset)
+                    },
+                    None => {
+                        println!("varibale '{}' is undefined", ident);
+                        panic!("");
+                    }
+                }
             },
             Bool(ref value) => {
                 self.pos += 1;
@@ -140,6 +209,14 @@ impl Parser {
     fn expect(&mut self, name: &str) -> bool {
         match self.token_list[self.pos] {
             Ident(ref ident) if *ident == name => {
+                self.pos += 1;
+                true
+            },
+            OpenPar if name == "(" => {
+                self.pos += 1;
+                true
+            },
+            ClosePar if name == ")" => {
                 self.pos += 1;
                 true
             },
