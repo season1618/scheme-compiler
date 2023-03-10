@@ -24,7 +24,7 @@ pub enum Expr {
     Int(i32),
     Proc(String),
     Call { proc: Rc<Expr>, params: Vec<Expr> },
-    Cond { cond: Rc<Expr>, conseq: Rc<Expr>, alter: Rc<Expr> },
+    If { test: Rc<Expr>, conseq: Rc<Expr>, alter: Rc<Expr> },
 }
 
 #[derive(Debug, Clone)]
@@ -202,6 +202,14 @@ impl Parser {
                     let id = self.proc_list.len();
                     self.proc_list.push(Lambda { args_num, body });
                     return Expr::Proc(format!("_{}", id));
+                }
+
+                if self.expect("if") {
+                    let test = Rc::new(self.parse_expr());
+                    let conseq = Rc::new(self.parse_expr());
+                    let alter = Rc::new(self.parse_expr());
+                    self.consume(")");
+                    return Expr::If { test, conseq, alter };
                 }
 
                 let proc = Rc::new(self.parse_expr());

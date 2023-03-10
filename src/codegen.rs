@@ -9,6 +9,7 @@ pub fn gen_asm(lambda_list: Vec<Node>, node_list: Vec<Node>, dest_path: String) 
 struct CodeGen {
     dest: File,
     lambda_num: usize,
+    if_num: usize,
 }
 
 impl CodeGen {
@@ -16,6 +17,7 @@ impl CodeGen {
         CodeGen {
             dest: File::create(dest_path).unwrap(),
             lambda_num: 0,
+            if_num: 0,
         }
     }
 
@@ -62,6 +64,7 @@ impl CodeGen {
             self.gen_node(node);
         }
 
+        writeln!(self.dest, "    pop rax").unwrap();
         writeln!(self.dest, "    mov rsp, rbp").unwrap();
         writeln!(self.dest, "    pop rbp").unwrap();
         writeln!(self.dest, "    ret").unwrap();
@@ -126,6 +129,26 @@ impl CodeGen {
                 writeln!(self.dest, "    call rax").unwrap();
                 writeln!(self.dest, "    push rax").unwrap();
             },
+            Expr::If { test, conseq, alter } => {
+                let label1 = self.if_num;
+                let label2 = self.if_num + 1;
+                self.if_num += 2;
+
+                self.gen_expr((*test).clone());
+
+                writeln!(self.dest, "    pop rax").unwrap();
+                writeln!(self.dest, "    cmp rax, 0").unwrap();
+                writeln!(self.dest, "    je .L{}", label1).unwrap();
+
+                self.gen_expr((*conseq).clone());
+                writeln!(self.dest, "    jmp .L{}", label2).unwrap();
+
+                writeln!(self.dest, ".L{}:", label1).unwrap();
+
+                self.gen_expr((*alter).clone());
+
+                writeln!(self.dest, ".L{}:", label2).unwrap();
+            }
             _ => {},
         }
     }
