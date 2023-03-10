@@ -23,7 +23,7 @@ pub enum Expr {
     Bool(bool),
     Int(i32),
     Proc(String),
-    Call { proc: Rc<Expr>, params: Vec<Rc<Expr>> },
+    Call { proc: Rc<Expr>, params: Vec<Expr> },
     Cond { cond: Rc<Expr>, conseq: Rc<Expr>, alter: Rc<Expr> },
 }
 
@@ -199,15 +199,15 @@ impl Parser {
                         self.env.pop();
                     }
     
-                    // self.node_list.push(Node::Lambda { args_num, body });
+                    let id = self.proc_list.len();
                     self.proc_list.push(Lambda { args_num, body });
-                    return Expr::Proc("_".to_string() + &self.proc_list.len().to_string());
+                    return Expr::Proc(format!("_{}", id));
                 }
 
                 let proc = Rc::new(self.parse_expr());
-                let mut params: Vec<Rc<Expr>> = Vec::new();
+                let mut params: Vec<Expr> = Vec::new();
                 while self.token_list[self.pos] != ClosePar {
-                    params.push(Rc::new(self.parse_expr()));
+                    params.push(self.parse_expr());
                 }
                 self.consume(")");
 

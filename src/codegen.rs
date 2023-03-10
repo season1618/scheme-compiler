@@ -72,8 +72,8 @@ impl CodeGen {
             Node::Defn(defn) => self.gen_defn(defn),
             Node::Expr(expr) => self.gen_expr(expr),
             Node::Lambda { args_num, body } => {
-                self.lambda_num += 1;
                 let id = self.lambda_num;
+                self.lambda_num += 1;
                 writeln!(self.dest, "_{}:", id);
                 writeln!(self.dest, "    push rbp").unwrap();
                 writeln!(self.dest, "    mov rbp, rsp").unwrap();
@@ -119,7 +119,7 @@ impl CodeGen {
             },
             Expr::Call { proc, params } => {
                 for param in params.into_iter().rev() {
-                    self.gen_expr((*param).clone());
+                    self.gen_expr(param);
                 }
                 self.gen_expr((*proc).clone());
                 writeln!(self.dest, "    pop rax").unwrap();
