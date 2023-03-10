@@ -22,6 +22,6 @@ fn main() {
 
     let src_code = &fs::read_to_string(src_name).expect("could not read the source file");
     let token_list = tokenize(src_code);
-    let node_list = parse(token_list);
-    gen_asm(node_list, dst_name);
+    let (lambda_list, node_list) = parse(token_list);
+    gen_asm(lambda_list, node_list, dst_name);
 }

@@ -2,22 +2,24 @@ use std::fs::File;
 use std::io::Write;
 use crate::parser::*;
 
-pub fn gen_asm(node_list: Vec<Node>, dest_path: String) {
-    CodeGen::new(dest_path).gen_asm(node_list);
+pub fn gen_asm(lambda_list: Vec<Node>, node_list: Vec<Node>, dest_path: String) {
+    CodeGen::new(dest_path).gen_asm(lambda_list, node_list);
 }
 
 struct CodeGen {
     dest: File,
+    lambda_num: usize,
 }
 
 impl CodeGen {
     fn new(dest_path: String) -> Self {
         CodeGen {
             dest: File::create(dest_path).unwrap(),
+            lambda_num: 0,
         }
     }
 
-    fn gen_asm(&mut self, node_list: Vec<Node>) {
+    fn gen_asm(&mut self, lambda_list: Vec<Node>, node_list: Vec<Node>) {
         writeln!(self.dest, ".intel_syntax noprefix").unwrap();
         writeln!(self.dest, ".global main").unwrap();
 
@@ -47,6 +49,10 @@ impl CodeGen {
         writeln!(self.dest, "    add rax, QWORD PTR [rsp+16]").unwrap();
         writeln!(self.dest, "    ret").unwrap();
 
+        for proc in lambda_list {
+            self.gen_node(proc);
+        }
+
         writeln!(self.dest, "main:").unwrap();
         writeln!(self.dest, "    push rbp").unwrap();
         writeln!(self.dest, "    mov rbp, rsp").unwrap();
@@ -65,6 +71,31 @@ impl CodeGen {
         match node {
             Node::Defn(defn) => self.gen_defn(defn),
             Node::Expr(expr) => self.gen_expr(expr),
+            Node::Lambda { args_num, body } => {
+                self.lambda_num += 1;
+                let id = self.lambda_num;
+                writeln!(self.dest, "_{}:", id);
+                writeln!(self.dest, "    push rbp").unwrap();
+                writeln!(self.dest, "    mov rbp, rsp").unwrap();
+                writeln!(self.dest, "    sub rsp, {}", 8 * args_num).unwrap();
+
+                for i in 1..args_num + 1 {
+                    writeln!(self.dest, "    mov rax, QWORD PTR [rbp+{}]", 8 * (i + 1)).unwrap();
+                    writeln!(self.dest, "    mov QWORD PTR [rbp-{}], rax", 8 * i).unwrap();
+                }
+
+                for expr in body {
+                    match expr {
+                        Node::Defn(defn) => self.gen_defn(defn),
+                        Node::Expr(expr) => self.gen_expr(expr),
+                        _ => {},
+                    }
+                }
+
+                writeln!(self.dest, "    mov rsp, rbp").unwrap();
+                writeln!(self.dest, "    pop rbp").unwrap();
+                writeln!(self.dest, "    ret").unwrap();
+            },
         }
     }
 
@@ -79,6 +110,10 @@ impl CodeGen {
             Expr::Int(val) => {
                 writeln!(self.dest, "    push {}", val).unwrap();
             },
+            Expr::Proc(name) => {
+                writeln!(self.dest, "    lea rax, [rip+{}]", name).unwrap();
+                writeln!(self.dest, "    push rax").unwrap();
+            },
             Expr::Var(offset) => {
                 writeln!(self.dest, "    push QWORD PTR [rbp-{}]", offset).unwrap();
             },
@@ -86,7 +121,9 @@ impl CodeGen {
                 for param in params.into_iter().rev() {
                     self.gen_expr((*param).clone());
                 }
-                writeln!(self.dest, "    call {}", proc).unwrap();
+                self.gen_expr((*proc).clone());
+                writeln!(self.dest, "    pop rax").unwrap();
+                writeln!(self.dest, "    call rax").unwrap();
                 writeln!(self.dest, "    push rax").unwrap();
             },
             _ => {},

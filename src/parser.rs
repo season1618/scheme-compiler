@@ -2,14 +2,16 @@ use std::rc::Rc;
 use crate::lexer::Token;
 use Token::*;
 // use Node::*;
+// use Expr::*;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Node {
     Defn(Defn),
     Expr(Expr),
+    Lambda { args_num: usize, body: Vec<Node> },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Defn {
     pub offset: usize,
     pub expr: Expr,
@@ -21,42 +23,52 @@ pub enum Expr {
     Bool(bool),
     Int(i32),
     Proc(String),
-    Lambda { args: Vec<String>, body: Vec<Rc<Node>> },
-    Call { proc: String, params: Vec<Rc<Expr>> },
+    Call { proc: Rc<Expr>, params: Vec<Rc<Expr>> },
     Cond { cond: Rc<Expr>, conseq: Rc<Expr>, alter: Rc<Expr> },
 }
 
-pub fn parse(token_list: Vec<Token>) -> Vec<Node> {
+#[derive(Debug, Clone)]
+pub enum Var {
+    Global(String),
+    Local(usize),
+}
+
+#[derive(Debug, Clone)]
+pub struct Lambda {
+    args_num: usize,
+    body: Vec<Node>,
+}
+
+pub fn parse(token_list: Vec<Token>) -> (Vec<Node>, Vec<Node>) {
     Parser::new(token_list).parse_program()
-}
-
-struct Counter {
-    count: usize,
-}
-
-impl Counter {
-    fn new() -> Self {
-        Counter { count: 0 }
-    }
-
-    fn next(&mut self) -> usize {
-        self.count += 8;
-        self.count
-    }
 }
 
 #[derive(Debug)]
 struct Env {
     vec: Vec<(String, usize)>,
+    offset: usize,
 }
 
 impl Env {
     fn new() -> Self {
-        Env { vec: Vec::new() }
+        Env {
+            vec: Vec::new(),
+            offset: 0,
+        }
     }
 
-    fn push(&mut self, name: String, offset: usize) {
-        self.vec.push((name, offset));
+    fn offset(&self) -> usize {
+        self.offset
+    }
+
+    fn push(&mut self, name: String) {
+        self.offset += 8;
+        self.vec.push((name, self.offset));
+    }
+
+    fn pop(&mut self) {
+        self.offset -= 8;
+        self.vec.pop();
     }
 
     fn find(&self, name: String) -> Option<usize> {
@@ -71,9 +83,8 @@ impl Env {
 
 struct Parser {
     token_list: Vec<Token>,
+    proc_list: Vec<Lambda>,
     pos: usize,
-    var_cnt: Counter,
-    lambda_cnt: usize,
     env: Env,
 }
 
@@ -81,20 +92,29 @@ impl Parser {
     fn new(token_list: Vec<Token>) -> Self {
         Parser {
             token_list: token_list,
+            proc_list: Vec::new(),
             pos: 0,
-            var_cnt: Counter::new(),
-            lambda_cnt: 0,
             env: Env::new(),
         }
     }
 
-    fn parse_program(&mut self) -> Vec<Node> {
+    fn parse_program(&mut self) -> (Vec<Node>, Vec<Node>) {
         let mut node_list: Vec<Node> = Vec::new();
         while self.pos < self.token_list.len() {
             node_list.push(self.parse_node());
         }
+
+        let mut lambda_list: Vec<Node> = Vec::new();
+        for i in 0..self.proc_list.len() {
+            match self.proc_list[i] {
+                Lambda { args_num, ref body } => {
+                    lambda_list.push(Node::Lambda { args_num, body: body.clone() });
+                }
+            }
+        }
+        println!("{:?}", lambda_list);
         println!("{:?}", node_list);
-        node_list
+        (lambda_list, node_list)
     }
 
     fn parse_node(&mut self) -> Node {
@@ -103,10 +123,9 @@ impl Parser {
                 return Node::Defn(self.parse_defn());
             } else {
                 self.pos -= 1;
-                return Node::Expr(self.parse_expr());
             }
         }
-        panic!("");
+        return Node::Expr(self.parse_expr());
     }
 
     fn parse_defn(&mut self) -> Defn {
@@ -114,12 +133,11 @@ impl Parser {
             Ident(ref ident) => {
                 self.pos += 1;
                 let name = ident.clone();
-                let offset = self.var_cnt.next();
                 let expr = self.parse_expr();
                 self.consume(")");
 
-                self.env.push(name, offset);
-                Defn { offset, expr }
+                self.env.push(name);
+                Defn { offset: self.env.offset(), expr }
             },
             _ => {
                 panic!("not identifier.");
@@ -160,45 +178,40 @@ impl Parser {
             OpenPar => {
                 self.pos += 1;
 
-                // match self.token_list[self.pos] {
-                //     Ident(ref ident) => {
-                //         self.pos += 1;
-                        
-                //     },
-                //     OpenPar => {
-                //         self.consume("lambda");
-        
-                //         let mut args: Vec<String> = Vec::new();
-                //         self.consume("(");
-                //         while let Ident(ref ident) = self.token_list[self.pos] {
-                //             args.push(ident.clone());
-                //             self.pos += 1;
-                //         }
-                //         self.consume(")");
-        
-                //         let mut body: Vec<Rc<Node>> = Vec::new();
-                //         while let Node::Expr(expr) = self.parse_node() {
-                //             body.push(Rc::new(Node::Expr(expr)));
-                //         }
-        
-                //         // Expr::Lambda { args, body }
-                //         self.lambda_cnt += 1;
-                //         (self.lambda_cnt - 1).to_string()
-                //     },
-                //     _ => { panic!(""); },
-                // }
-
-                if let Expr::Proc(proc) = self.parse_expr() {
-                    let mut params: Vec<Rc<Expr>> = Vec::new();
-                    while self.token_list[self.pos] != ClosePar {
-                        params.push(Rc::new(self.parse_expr()));
+                if self.expect("lambda") {
+                    let mut args_num = 0;
+                    self.consume("(");
+                    while let Ident(ref ident) = self.token_list[self.pos] {
+                        self.env.push(ident.clone());
+                        args_num += 1;
+                        self.pos += 1;
                     }
-                    self.pos += 1;
+                    self.consume(")");
+    
+                    let mut body: Vec<Node> = Vec::new();
+                    while self.token_list[self.pos] != ClosePar {
+                        body.push(self.parse_node());
+                    }
 
-                    return Expr::Call { proc, params };
+                    self.consume(")");
+
+                    for _ in 0..args_num {
+                        self.env.pop();
+                    }
+    
+                    // self.node_list.push(Node::Lambda { args_num, body });
+                    self.proc_list.push(Lambda { args_num, body });
+                    return Expr::Proc("_".to_string() + &self.proc_list.len().to_string());
                 }
 
-                panic!("");
+                let proc = Rc::new(self.parse_expr());
+                let mut params: Vec<Rc<Expr>> = Vec::new();
+                while self.token_list[self.pos] != ClosePar {
+                    params.push(Rc::new(self.parse_expr()));
+                }
+                self.consume(")");
+
+                return Expr::Call { proc, params };
             },
             ClosePar => {
                 panic!("too much ')'");
