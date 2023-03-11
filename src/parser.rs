@@ -150,10 +150,18 @@ impl Parser {
             Ident(ref ident) => {
                 self.pos += 1;
                 
-                if ident == "+" { return Expr::Proc("plus".to_string()); }
+                if ident == "=" { return Expr::Proc("equal".to_string()); }
+                if ident == "!=" { return Expr::Proc("neq".to_string()); }
+                if ident == "<" { return Expr::Proc("lth".to_string()); }
+                if ident == "<=" { return Expr::Proc("leq".to_string()); }
+                if ident == ">" { return Expr::Proc("gth".to_string()); }
+                if ident == ">=" { return Expr::Proc("geq".to_string()); }
+                if ident == "+" { return Expr::Proc("add".to_string()); }
+                if ident == "-" { return Expr::Proc("sub".to_string()); }
                 if ident == "*" { return Expr::Proc("mul".to_string()); }
+                if ident == "/" { return Expr::Proc("div".to_string()); }
 
-                for std_proc in ["cons", "car", "cdr"] {
+                for std_proc in ["cons", "car", "cdr", "rem"] {
                     if ident == std_proc {
                         return Expr::Proc(ident.clone());
                     }

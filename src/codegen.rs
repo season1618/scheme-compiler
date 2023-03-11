@@ -45,10 +45,76 @@ impl CodeGen {
         writeln!(self.dest, "    mov rax, QWORD PTR [rax+8]").unwrap();
         writeln!(self.dest, "    ret").unwrap();
 
-        writeln!(self.dest, "plus:").unwrap();
+        writeln!(self.dest, "equal:").unwrap();
+        writeln!(self.dest, "    mov rax, QWORD PTR [rsp+8]").unwrap();
+        writeln!(self.dest, "    mov rdi, QWORD PTR [rsp+16]").unwrap();
+        writeln!(self.dest, "    cmp rax, rdi").unwrap();
+        writeln!(self.dest, "    sete al").unwrap();
+        writeln!(self.dest, "    movzb rax, al").unwrap();
+        writeln!(self.dest, "    ret").unwrap();
+
+        writeln!(self.dest, "neq:").unwrap();
+        writeln!(self.dest, "    mov rax, QWORD PTR [rsp+8]").unwrap();
+        writeln!(self.dest, "    mov rdi, QWORD PTR [rsp+16]").unwrap();
+        writeln!(self.dest, "    cmp rax, rdi").unwrap();
+        writeln!(self.dest, "    setne al").unwrap();
+        writeln!(self.dest, "    movzb rax, al").unwrap();
+        writeln!(self.dest, "    ret").unwrap();
+
+        writeln!(self.dest, "lth:").unwrap();
+        writeln!(self.dest, "    mov rax, QWORD PTR [rsp+8]").unwrap();
+        writeln!(self.dest, "    mov rdi, QWORD PTR [rsp+16]").unwrap();
+        writeln!(self.dest, "    cmp rax, rdi").unwrap();
+        writeln!(self.dest, "    setl al").unwrap();
+        writeln!(self.dest, "    movzb rax, al").unwrap();
+        writeln!(self.dest, "    ret").unwrap();
+
+        writeln!(self.dest, "leq:").unwrap();
+        writeln!(self.dest, "    mov rax, QWORD PTR [rsp+8]").unwrap();
+        writeln!(self.dest, "    mov rdi, QWORD PTR [rsp+16]").unwrap();
+        writeln!(self.dest, "    cmp rax, rdi").unwrap();
+        writeln!(self.dest, "    setle al").unwrap();
+        writeln!(self.dest, "    movzb rax, al").unwrap();
+        writeln!(self.dest, "    ret").unwrap();
+
+        writeln!(self.dest, "gth:").unwrap();
+        writeln!(self.dest, "    mov rax, QWORD PTR [rsp+8]").unwrap();
+        writeln!(self.dest, "    mov rdi, QWORD PTR [rsp+16]").unwrap();
+        writeln!(self.dest, "    cmp rax, rdi").unwrap();
+        writeln!(self.dest, "    setg al").unwrap();
+        writeln!(self.dest, "    movzb rax, al").unwrap();
+        writeln!(self.dest, "    ret").unwrap();
+
+        writeln!(self.dest, "geq:").unwrap();
+        writeln!(self.dest, "    mov rax, QWORD PTR [rsp+8]").unwrap();
+        writeln!(self.dest, "    mov rdi, QWORD PTR [rsp+16]").unwrap();
+        writeln!(self.dest, "    cmp rax, rdi").unwrap();
+        writeln!(self.dest, "    setge al").unwrap();
+        writeln!(self.dest, "    movzb rax, al").unwrap();
+        writeln!(self.dest, "    ret").unwrap();
+
+        writeln!(self.dest, "add:").unwrap();
         writeln!(self.dest, "    mov rax, 0").unwrap();
         writeln!(self.dest, "    add rax, QWORD PTR [rsp+8]").unwrap();
         writeln!(self.dest, "    add rax, QWORD PTR [rsp+16]").unwrap();
+        writeln!(self.dest, "    ret").unwrap();
+
+        writeln!(self.dest, "sub:").unwrap();
+        writeln!(self.dest, "    mov rax, QWORD PTR [rsp+8]").unwrap();
+        writeln!(self.dest, "    sub rax, QWORD PTR [rsp+16]").unwrap();
+        writeln!(self.dest, "    ret").unwrap();
+
+        writeln!(self.dest, "div:").unwrap();
+        writeln!(self.dest, "    mov rax, QWORD PTR [rsp+8]").unwrap();
+        writeln!(self.dest, "    cqo").unwrap();
+        writeln!(self.dest, "    idiv QWORD PTR [rsp+16]").unwrap();
+        writeln!(self.dest, "    ret").unwrap();
+
+        writeln!(self.dest, "rem:").unwrap();
+        writeln!(self.dest, "    mov rax, QWORD PTR [rsp+8]").unwrap();
+        writeln!(self.dest, "    cqo").unwrap();
+        writeln!(self.dest, "    idiv QWORD PTR [rsp+16]").unwrap();
+        writeln!(self.dest, "    mov rax, rdi").unwrap();
         writeln!(self.dest, "    ret").unwrap();
 
         for proc in lambda_list {
@@ -77,7 +143,7 @@ impl CodeGen {
             Node::Lambda { args_num, body } => {
                 let id = self.lambda_num;
                 self.lambda_num += 1;
-                writeln!(self.dest, "_{}:", id);
+                writeln!(self.dest, "_{}:", id).unwrap();
                 writeln!(self.dest, "    push rbp").unwrap();
                 writeln!(self.dest, "    mov rbp, rsp").unwrap();
                 writeln!(self.dest, "    sub rsp, {}", 8 * args_num).unwrap();
