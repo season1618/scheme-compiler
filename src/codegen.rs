@@ -151,7 +151,7 @@ impl CodeGen {
         writeln!(self.dest, "_{}:", id).unwrap();
         writeln!(self.dest, "    push rbp").unwrap();
         writeln!(self.dest, "    mov rbp, rsp").unwrap();
-        writeln!(self.dest, "    sub rsp, {}", 8 * proc.args_num).unwrap();
+        writeln!(self.dest, "    sub rsp, {}", 8 * proc.local_num).unwrap();
 
         for i in 1..proc.args_num + 1 {
             writeln!(self.dest, "    mov rax, QWORD PTR [rbp+{}]", 8 * (i + 1)).unwrap();

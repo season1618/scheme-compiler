@@ -42,6 +42,7 @@ pub struct GlobalDef {
 #[derive(Debug, Clone)]
 pub struct Lambda {
     pub args_num: usize,
+    pub local_num: usize,
     pub body: Vec<Node>,
 }
 
@@ -219,6 +220,7 @@ impl Parser {
                 self.pos += 1;
 
                 if self.expect("lambda") {
+                    let begin_offset = self.env.offset();
                     let mut args_num = 0;
                     self.consume("(");
                     while let Ident(ref ident) = self.token_list[self.pos] {
@@ -235,12 +237,15 @@ impl Parser {
 
                     self.consume(")");
 
-                    for _ in 0..args_num {
+                    let end_offset = self.env.offset();
+                    let local_num = (end_offset - begin_offset) / 8;
+
+                    for _ in 0..local_num {
                         self.env.pop();
                     }
     
                     let id = self.proc_list.len();
-                    self.proc_list.push(Lambda { args_num, body });
+                    self.proc_list.push(Lambda { args_num, local_num, body });
                     return Expr::Proc(format!("_{}", id));
                 }
 
