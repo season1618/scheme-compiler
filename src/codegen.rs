@@ -2,8 +2,8 @@ use std::fs::File;
 use std::io::Write;
 use crate::parser::*;
 
-pub fn gen_asm(lambda_list: Vec<Node>, node_list: Vec<Node>, dest_path: String) {
-    CodeGen::new(dest_path).gen_asm(lambda_list, node_list);
+pub fn gen_asm(parser: Parser, dest_path: String) {
+    CodeGen::new(dest_path).gen_asm(parser);
 }
 
 struct CodeGen {
@@ -21,9 +21,18 @@ impl CodeGen {
         }
     }
 
-    fn gen_asm(&mut self, lambda_list: Vec<Node>, node_list: Vec<Node>) {
+    fn gen_asm(&mut self, parser: Parser) {
         writeln!(self.dest, ".intel_syntax noprefix").unwrap();
         writeln!(self.dest, ".global main").unwrap();
+
+        writeln!(self.dest, ".data").unwrap();
+
+        for global in parser.env.vec {
+            writeln!(self.dest, "{}:", global.0).unwrap();
+            writeln!(self.dest, "    .zero 8").unwrap();
+        }
+
+        writeln!(self.dest, ".text").unwrap();
 
         writeln!(self.dest, "cons:").unwrap();
         writeln!(self.dest, "    mov rdi, 2").unwrap();
@@ -117,8 +126,8 @@ impl CodeGen {
         writeln!(self.dest, "    mov rax, rdi").unwrap();
         writeln!(self.dest, "    ret").unwrap();
 
-        for proc in lambda_list {
-            self.gen_node(proc);
+        for proc in parser.proc_list {
+            self.gen_proc(proc);
         }
 
         writeln!(self.dest, "main:").unwrap();
@@ -126,8 +135,35 @@ impl CodeGen {
         writeln!(self.dest, "    mov rbp, rsp").unwrap();
         writeln!(self.dest, "    sub rsp, 200").unwrap();
 
-        for node in node_list {
+        for node in parser.node_list {
             self.gen_node(node);
+        }
+
+        writeln!(self.dest, "    pop rax").unwrap();
+        writeln!(self.dest, "    mov rsp, rbp").unwrap();
+        writeln!(self.dest, "    pop rbp").unwrap();
+        writeln!(self.dest, "    ret").unwrap();
+    }
+
+    fn gen_proc(&mut self, proc: Lambda) {
+        let id = self.lambda_num;
+        self.lambda_num += 1;
+        writeln!(self.dest, "_{}:", id).unwrap();
+        writeln!(self.dest, "    push rbp").unwrap();
+        writeln!(self.dest, "    mov rbp, rsp").unwrap();
+        writeln!(self.dest, "    sub rsp, {}", 8 * proc.args_num).unwrap();
+
+        for i in 1..proc.args_num + 1 {
+            writeln!(self.dest, "    mov rax, QWORD PTR [rbp+{}]", 8 * (i + 1)).unwrap();
+            writeln!(self.dest, "    mov QWORD PTR [rbp-{}], rax", 8 * i).unwrap();
+        }
+
+        for expr in proc.body {
+            match expr {
+                Node::Defn(defn) => self.gen_defn(defn),
+                Node::Expr(expr) => self.gen_expr(expr),
+                _ => {},
+            }
         }
 
         writeln!(self.dest, "    pop rax").unwrap();
@@ -171,7 +207,14 @@ impl CodeGen {
     fn gen_defn(&mut self, defn: Defn) {
         self.gen_expr(defn.expr);
         writeln!(self.dest, "    pop rax").unwrap();
-        writeln!(self.dest, "    mov QWORD PTR [rbp-{}], rax", defn.offset).unwrap();
+        match defn.var {
+            Var::Global(name) => {
+                writeln!(self.dest, "    mov [rip+{}], rax", name).unwrap();
+            },
+            Var::Local(offset) => {
+                writeln!(self.dest, "    mov QWORD PTR [rbp-{}], rax", offset).unwrap();
+            },
+        }
     }
 
     fn gen_expr(&mut self, expr: Expr) {
@@ -183,8 +226,16 @@ impl CodeGen {
                 writeln!(self.dest, "    lea rax, [rip+{}]", name).unwrap();
                 writeln!(self.dest, "    push rax").unwrap();
             },
-            Expr::Var(offset) => {
-                writeln!(self.dest, "    push QWORD PTR [rbp-{}]", offset).unwrap();
+            Expr::Var(var) => {
+                match var {
+                    Var::Global(name) => {
+                        writeln!(self.dest, "    mov rax, [rip+{}]", name).unwrap();
+                        writeln!(self.dest, "    push rax").unwrap();
+                    },
+                    Var::Local(offset) => {
+                        writeln!(self.dest, "    push QWORD PTR [rbp-{}]", offset).unwrap();
+                    },
+                }
             },
             Expr::Call { proc, params } => {
                 for param in params.into_iter().rev() {

@@ -5,7 +5,7 @@ pub mod codegen;
 use std::env;
 use std::fs;
 use crate::lexer::tokenize;
-use crate::parser::parse;
+use crate::parser::Parser;
 use crate::codegen::gen_asm;
 
 fn main() {
@@ -22,6 +22,9 @@ fn main() {
 
     let src_code = &fs::read_to_string(src_name).expect("could not read the source file");
     let token_list = tokenize(src_code);
-    let (lambda_list, node_list) = parse(token_list);
-    gen_asm(lambda_list, node_list, dst_name);
+
+    let mut parser = Parser::new(token_list);
+    parser.parse_program();
+
+    gen_asm(parser, dst_name);
 }

@@ -3,6 +3,7 @@ use crate::lexer::Token;
 use Token::*;
 // use Node::*;
 // use Expr::*;
+use Var::*;
 
 #[derive(Debug, Clone)]
 pub enum Node {
@@ -13,13 +14,13 @@ pub enum Node {
 
 #[derive(Debug, Clone)]
 pub struct Defn {
-    pub offset: usize,
+    pub var: Var,
     pub expr: Expr,
 }
 
 #[derive(Debug, Clone)]
 pub enum Expr {
-    Var(usize),
+    Var(Var),
     Bool(bool),
     Int(i32),
     Proc(String),
@@ -34,18 +35,19 @@ pub enum Var {
 }
 
 #[derive(Debug, Clone)]
-pub struct Lambda {
-    args_num: usize,
-    body: Vec<Node>,
+pub struct GlobalDef {
+    name: String,
 }
 
-pub fn parse(token_list: Vec<Token>) -> (Vec<Node>, Vec<Node>) {
-    Parser::new(token_list).parse_program()
+#[derive(Debug, Clone)]
+pub struct Lambda {
+    pub args_num: usize,
+    pub body: Vec<Node>,
 }
 
 #[derive(Debug)]
-struct Env {
-    vec: Vec<(String, usize)>,
+pub struct Env {
+    pub vec: Vec<(String, Var)>,
     offset: usize,
 }
 
@@ -61,66 +63,68 @@ impl Env {
         self.offset
     }
 
-    fn push(&mut self, name: String) {
+    fn last(&self) -> Var {
+        self.vec.last().unwrap().clone().1
+    }
+
+    fn push_global(&mut self, name: String) {
+        let name2 = name.clone();
+        self.vec.push((name, Var::Global(name2)));
+    }
+    fn push_local(&mut self, name: String) {
         self.offset += 8;
-        self.vec.push((name, self.offset));
+        self.vec.push((name, Var::Local(self.offset)));
     }
 
     fn pop(&mut self) {
-        self.offset -= 8;
+        match self.vec.last().unwrap().1 {
+            Global(_) => {},
+            Local(_) => { self.offset -= 8; },
+        }
         self.vec.pop();
     }
 
-    fn find(&self, name: String) -> Option<usize> {
+    fn find(&self, name: String) -> Option<Var> {
         for var in &self.vec {
             if var.0 == name {
-                return Some(var.1);
+                return Some(var.1.clone());
             }
         }
         None
     }
 }
 
-struct Parser {
+pub struct Parser {
     token_list: Vec<Token>,
-    proc_list: Vec<Lambda>,
     pos: usize,
-    env: Env,
+    pub env: Env,
+    pub proc_list: Vec<Lambda>,
+    pub node_list: Vec<Node>,
 }
 
 impl Parser {
-    fn new(token_list: Vec<Token>) -> Self {
+    pub fn new(token_list: Vec<Token>) -> Self {
         Parser {
             token_list: token_list,
-            proc_list: Vec::new(),
             pos: 0,
             env: Env::new(),
+            proc_list: Vec::new(),
+            node_list: Vec::new(),
         }
     }
 
-    fn parse_program(&mut self) -> (Vec<Node>, Vec<Node>) {
-        let mut node_list: Vec<Node> = Vec::new();
+    pub fn parse_program(&mut self) {
         while self.pos < self.token_list.len() {
-            node_list.push(self.parse_node());
+            let node = self.parse_global_expr();
+            self.node_list.push(node);
         }
-
-        let mut lambda_list: Vec<Node> = Vec::new();
-        for i in 0..self.proc_list.len() {
-            match self.proc_list[i] {
-                Lambda { args_num, ref body } => {
-                    lambda_list.push(Node::Lambda { args_num, body: body.clone() });
-                }
-            }
-        }
-        println!("{:?}", lambda_list);
-        println!("{:?}", node_list);
-        (lambda_list, node_list)
+        println!("{:?}", self.node_list);
     }
 
-    fn parse_node(&mut self) -> Node {
+    fn parse_global_expr(&mut self) -> Node {
         if self.expect("(") {
             if self.expect("define") {
-                return Node::Defn(self.parse_defn());
+                return Node::Defn(self.parse_defn_global());
             } else {
                 self.pos -= 1;
             }
@@ -128,16 +132,44 @@ impl Parser {
         return Node::Expr(self.parse_expr());
     }
 
-    fn parse_defn(&mut self) -> Defn {
+    fn parse_local_expr(&mut self) -> Node {
+        if self.expect("(") {
+            if self.expect("define") {
+                return Node::Defn(self.parse_defn_local());
+            } else {
+                self.pos -= 1;
+            }
+        }
+        return Node::Expr(self.parse_expr());
+    }
+
+    fn parse_defn_global(&mut self) -> Defn {
         match self.token_list[self.pos] {
             Ident(ref ident) => {
                 self.pos += 1;
                 let name = ident.clone();
+                self.env.push_global(name);
                 let expr = self.parse_expr();
                 self.consume(")");
 
-                self.env.push(name);
-                Defn { offset: self.env.offset(), expr }
+                Defn { var: self.env.last(), expr }
+            },
+            _ => {
+                panic!("not identifier.");
+            },
+        }
+    }
+
+    fn parse_defn_local(&mut self) -> Defn {
+        match self.token_list[self.pos] {
+            Ident(ref ident) => {
+                self.pos += 1;
+                let name = ident.clone();
+                self.env.push_local(name);
+                let expr = self.parse_expr();
+                self.consume(")");
+
+                Defn { var: self.env.last(), expr }
             },
             _ => {
                 panic!("not identifier.");
@@ -168,7 +200,7 @@ impl Parser {
                 }
                 
                 match self.env.find(ident.clone()) {
-                    Some(offset) => Expr::Var(offset),
+                    Some(var) => Expr::Var(var),
                     None => {
                         println!("variable '{}' is undefined", ident);
                         panic!("");
@@ -190,7 +222,7 @@ impl Parser {
                     let mut args_num = 0;
                     self.consume("(");
                     while let Ident(ref ident) = self.token_list[self.pos] {
-                        self.env.push(ident.clone());
+                        self.env.push_local(ident.clone());
                         args_num += 1;
                         self.pos += 1;
                     }
@@ -198,7 +230,7 @@ impl Parser {
     
                     let mut body: Vec<Node> = Vec::new();
                     while self.token_list[self.pos] != ClosePar {
-                        body.push(self.parse_node());
+                        body.push(self.parse_local_expr());
                     }
 
                     self.consume(")");
