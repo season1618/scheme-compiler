@@ -238,12 +238,14 @@ impl CodeGen {
                 }
             },
             Expr::Call { proc, params } => {
+                let params_num = params.len();
                 for param in params.into_iter().rev() {
                     self.gen_expr(param);
                 }
                 self.gen_expr((*proc).clone());
                 writeln!(self.dest, "    pop rax").unwrap();
                 writeln!(self.dest, "    call rax").unwrap();
+                writeln!(self.dest, "    add rsp, {}", 8 * params_num).unwrap();
                 writeln!(self.dest, "    push rax").unwrap();
             },
             Expr::If { test, conseq, alter } => {
