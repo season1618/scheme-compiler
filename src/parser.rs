@@ -31,7 +31,7 @@ pub enum Expr {
 #[derive(Debug, Clone)]
 pub enum Var {
     Global(String),
-    Local(usize),
+    Local(usize, bool),
 }
 
 #[derive(Debug, Clone)]
@@ -78,18 +78,19 @@ impl Env {
     }
     fn push_local(&mut self, name: String) {
         let offset = (self.vec.last().unwrap().len() + 1) * 8;
-        self.vec.last_mut().unwrap().push((name, Var::Local(offset)));
+        self.vec.last_mut().unwrap().push((name, Var::Local(offset, false)));
     }
 
     fn pop_frame(&mut self) {
         self.vec.pop();
     }
 
-    fn find(&self, name: String) -> Option<Var> {
+    fn find(&mut self, name: String) -> Option<Var> {
         for i in (0..self.vec.len()).rev() {
             let frame = &self.vec[i];
             for var in frame {
                 if var.0 == name {
+                    // var.1.1 = 0 < i && i < self.vec.len() - 1;
                     return Some(var.1.clone());
                 }
             }
@@ -204,7 +205,10 @@ impl Parser {
                 }
                 
                 match self.env.find(ident.clone()) {
-                    Some(var) => Expr::Var(var),
+                    Some(var) => {
+                        // println!("{}", is_fv);
+                        Expr::Var(var)
+                    },
                     None => {
                         println!("variable '{}' is undefined", ident);
                         panic!("");
@@ -224,7 +228,7 @@ impl Parser {
 
                 if self.expect("lambda") {
                     self.env.push_frame();
-                    // let begin_offset = self.env.offset();
+
                     let mut args_num = 0;
                     self.consume("(");
                     while let Ident(ref ident) = self.token_list[self.pos] {
@@ -241,14 +245,8 @@ impl Parser {
 
                     self.consume(")");
 
-                    // let end_offset = self.env.offset();
-                    // let local_num = (end_offset - begin_offset) / 8;
                     let local_num = self.env.local_num();
                     self.env.pop_frame();
-
-                    // for _ in 0..local_num {
-                    //     self.env.pop();
-                    // }
     
                     let id = self.proc_list.len();
                     self.proc_list.push(Lambda { args_num, local_num, body });

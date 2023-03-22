@@ -211,7 +211,7 @@ impl CodeGen {
             Var::Global(name) => {
                 writeln!(self.dest, "    mov [rip+{}], rax", name).unwrap();
             },
-            Var::Local(offset) => {
+            Var::Local(offset, is_free) => {
                 writeln!(self.dest, "    mov QWORD PTR [rbp-{}], rax", offset).unwrap();
             },
         }
@@ -232,7 +232,7 @@ impl CodeGen {
                         writeln!(self.dest, "    mov rax, [rip+{}]", name).unwrap();
                         writeln!(self.dest, "    push rax").unwrap();
                     },
-                    Var::Local(offset) => {
+                    Var::Local(offset, is_free) => {
                         writeln!(self.dest, "    push QWORD PTR [rbp-{}]", offset).unwrap();
                     },
                 }
