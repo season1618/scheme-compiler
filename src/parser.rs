@@ -1,5 +1,8 @@
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::collections::HashSet;
+use std::collections::hash_set::Iter;
+
 use crate::lexer::Token;
 use Token::*;
 // use Node::*;
@@ -24,7 +27,7 @@ pub enum Expr {
     Var(Rc<RefCell<Var>>),
     Bool(bool),
     Int(i32),
-    Proc(String),
+    Proc(String, FVs),
     Call { proc: Rc<Expr>, params: Vec<Expr> },
     If { test: Rc<Expr>, conseq: Rc<Expr>, alter: Rc<Expr> },
 }
@@ -42,6 +45,7 @@ pub struct GlobalDef {
 
 #[derive(Debug, Clone)]
 pub struct Lambda {
+    pub free_vars: FVs,
     pub args_num: usize,
     pub local_num: usize,
     pub body: Vec<Node>,
@@ -103,6 +107,55 @@ impl Env {
         }
         None
     }
+
+    fn find_fv(&mut self, name: String) -> Option<(usize, usize, String)> {
+        for i in (0..self.vec.len()).rev() {
+            let frame = &self.vec[i];
+            for var in frame {
+                if var.0 == name {
+                    match *var.1.borrow_mut() {
+                        Local(offset, is_free) if is_free => {
+                            return Some((i, offset, name.clone()));
+                        },
+                        _ => {},
+                    }
+                }
+            }
+        }
+        None
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FVs {
+    pub set: HashSet<(usize, usize, String)>,
+}
+
+impl FVs {
+    fn new() -> Self {
+        FVs { set: HashSet::new() }
+    }
+
+    pub fn len(&self) -> usize {
+        self.set.len()
+    }
+
+    pub fn iter(&self) -> Iter<'_, (usize, usize, String)> {
+        self.set.iter()
+    }
+
+    fn insert(&mut self, fv: (usize, usize, String)) {
+        self.set.insert(fv);
+    }
+
+    fn find(&self, name: String) -> Option<usize> {
+        for (i, fv) in self.set.iter().enumerate() {
+            if fv.2 == name {
+                return Some(8 * i);
+            }
+        }
+        None
+    }
 }
 
 pub struct Parser {
@@ -140,18 +193,18 @@ impl Parser {
                 self.pos -= 1;
             }
         }
-        return Node::Expr(self.parse_expr());
+        return Node::Expr(self.parse_expr(&mut FVs::new()));
     }
 
-    fn parse_local_expr(&mut self) -> Node {
+    fn parse_local_expr(&mut self, fv: &mut FVs) -> Node {
         if self.expect("(") {
             if self.expect("define") {
-                return Node::Defn(self.parse_defn_local());
+                return Node::Defn(self.parse_defn_local(fv));
             } else {
                 self.pos -= 1;
             }
         }
-        return Node::Expr(self.parse_expr());
+        return Node::Expr(self.parse_expr(fv));
     }
 
     fn parse_defn_global(&mut self) -> Defn {
@@ -160,7 +213,7 @@ impl Parser {
                 self.pos += 1;
                 let name = ident.clone();
                 self.env.push_global(name);
-                let expr = self.parse_expr();
+                let expr = self.parse_expr(&mut FVs::new());
                 self.consume(")");
 
                 Defn { var: self.env.last(), expr }
@@ -171,13 +224,13 @@ impl Parser {
         }
     }
 
-    fn parse_defn_local(&mut self) -> Defn {
+    fn parse_defn_local(&mut self, fv: &mut FVs) -> Defn {
         match self.token_list[self.pos] {
             Ident(ref ident) => {
                 self.pos += 1;
                 let name = ident.clone();
                 self.env.push_local(name);
-                let expr = self.parse_expr();
+                let expr = self.parse_expr(fv);
                 self.consume(")");
 
                 Defn { var: self.env.last(), expr }
@@ -188,31 +241,36 @@ impl Parser {
         }
     }
 
-    fn parse_expr(&mut self) -> Expr {
+    fn parse_expr(&mut self, fv: &mut FVs) -> Expr {
         match self.token_list[self.pos] {
             Ident(ref ident) => {
                 self.pos += 1;
                 
-                if ident == "=" { return Expr::Proc("equal".to_string()); }
-                if ident == "!=" { return Expr::Proc("neq".to_string()); }
-                if ident == "<" { return Expr::Proc("lth".to_string()); }
-                if ident == "<=" { return Expr::Proc("leq".to_string()); }
-                if ident == ">" { return Expr::Proc("gth".to_string()); }
-                if ident == ">=" { return Expr::Proc("geq".to_string()); }
-                if ident == "+" { return Expr::Proc("add".to_string()); }
-                if ident == "-" { return Expr::Proc("sub".to_string()); }
-                if ident == "*" { return Expr::Proc("mul".to_string()); }
-                if ident == "/" { return Expr::Proc("div".to_string()); }
+                if ident == "=" { return Expr::Proc("equal".to_string(), FVs::new()); }
+                if ident == "!=" { return Expr::Proc("neq".to_string(), FVs::new()); }
+                if ident == "<" { return Expr::Proc("lth".to_string(), FVs::new()); }
+                if ident == "<=" { return Expr::Proc("leq".to_string(), FVs::new()); }
+                if ident == ">" { return Expr::Proc("gth".to_string(), FVs::new()); }
+                if ident == ">=" { return Expr::Proc("geq".to_string(), FVs::new()); }
+                if ident == "+" { return Expr::Proc("add".to_string(), FVs::new()); }
+                if ident == "-" { return Expr::Proc("sub".to_string(), FVs::new()); }
+                if ident == "*" { return Expr::Proc("mul".to_string(), FVs::new()); }
+                if ident == "/" { return Expr::Proc("div".to_string(), FVs::new()); }
 
                 for std_proc in ["cons", "car", "cdr", "rem"] {
                     if ident == std_proc {
-                        return Expr::Proc(ident.clone());
+                        return Expr::Proc(ident.clone(), FVs::new());
                     }
                 }
                 
                 match self.env.find(ident.clone()) {
                     Some(var) => {
-                        // println!("{}", is_fv);
+                        match *var.borrow() {
+                            Local(_, is_free) if is_free => {
+                                fv.insert(self.env.find_fv(ident.clone()).unwrap());
+                            },
+                            _ => {},
+                        }
                         Expr::Var(var)
                     },
                     None => {
@@ -245,8 +303,9 @@ impl Parser {
                     self.consume(")");
     
                     let mut body: Vec<Node> = Vec::new();
+                    let mut next_fv = FVs::new();
                     while self.token_list[self.pos] != ClosePar {
-                        body.push(self.parse_local_expr());
+                        body.push(self.parse_local_expr(&mut next_fv));
                     }
 
                     self.consume(")");
@@ -255,22 +314,22 @@ impl Parser {
                     self.env.pop_frame();
     
                     let id = self.proc_list.len();
-                    self.proc_list.push(Lambda { args_num, local_num, body });
-                    return Expr::Proc(format!("_{}", id));
+                    self.proc_list.push(Lambda { free_vars: next_fv.clone(), args_num, local_num, body });
+                    return Expr::Proc(format!("_{}", id), next_fv);
                 }
 
                 if self.expect("if") {
-                    let test = Rc::new(self.parse_expr());
-                    let conseq = Rc::new(self.parse_expr());
-                    let alter = Rc::new(self.parse_expr());
+                    let test = Rc::new(self.parse_expr(fv));
+                    let conseq = Rc::new(self.parse_expr(fv));
+                    let alter = Rc::new(self.parse_expr(fv));
                     self.consume(")");
                     return Expr::If { test, conseq, alter };
                 }
 
-                let proc = Rc::new(self.parse_expr());
+                let proc = Rc::new(self.parse_expr(fv));
                 let mut params: Vec<Expr> = Vec::new();
                 while self.token_list[self.pos] != ClosePar {
-                    params.push(self.parse_expr());
+                    params.push(self.parse_expr(fv));
                 }
                 self.consume(")");
 
