@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::cell::RefCell;
 use crate::lexer::Token;
 use Token::*;
 // use Node::*;
@@ -14,13 +15,13 @@ pub enum Node {
 
 #[derive(Debug, Clone)]
 pub struct Defn {
-    pub var: Var,
+    pub var: Rc<RefCell<Var>>,
     pub expr: Expr,
 }
 
 #[derive(Debug, Clone)]
 pub enum Expr {
-    Var(Var),
+    Var(Rc<RefCell<Var>>),
     Bool(bool),
     Int(i32),
     Proc(String),
@@ -48,7 +49,7 @@ pub struct Lambda {
 
 #[derive(Debug)]
 pub struct Env {
-    pub vec: Vec<Vec<(String, Var)>>,
+    pub vec: Vec<Vec<(String, Rc<RefCell<Var>>)>>,
 }
 
 impl Env {
@@ -60,11 +61,11 @@ impl Env {
         self.vec.last().unwrap().len()
     }
 
-    pub fn globals(&self) -> &Vec<(String, Var)> {
+    pub fn globals(&self) -> &Vec<(String, Rc<RefCell<Var>>)> {
         &self.vec[0]
     }
 
-    fn last(&self) -> Var {
+    fn last(&self) -> Rc<RefCell<Var>> {
         self.vec.last().unwrap().last().unwrap().clone().1
     }
 
@@ -74,23 +75,28 @@ impl Env {
 
     fn push_global(&mut self, name: String) {
         let name2 = name.clone();
-        self.vec[0].push((name, Var::Global(name2)));
+        self.vec[0].push((name, Rc::new(RefCell::new(Var::Global(name2)))));
     }
     fn push_local(&mut self, name: String) {
         let offset = (self.vec.last().unwrap().len() + 1) * 8;
-        self.vec.last_mut().unwrap().push((name, Var::Local(offset, false)));
+        self.vec.last_mut().unwrap().push((name, Rc::new(RefCell::new(Var::Local(offset, false)))));
     }
 
     fn pop_frame(&mut self) {
         self.vec.pop();
     }
 
-    fn find(&mut self, name: String) -> Option<Var> {
+    fn find(&mut self, name: String) -> Option<Rc<RefCell<Var>>> {
         for i in (0..self.vec.len()).rev() {
             let frame = &self.vec[i];
             for var in frame {
                 if var.0 == name {
-                    // var.1.1 = 0 < i && i < self.vec.len() - 1;
+                    match *var.1.borrow_mut() {
+                        Local(_, ref mut is_free) => {
+                            *is_free = 0 < i && i < self.vec.len() - 1;
+                        },
+                        _ => {},
+                    }
                     return Some(var.1.clone());
                 }
             }

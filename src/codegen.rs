@@ -207,9 +207,9 @@ impl CodeGen {
     fn gen_defn(&mut self, defn: Defn) {
         self.gen_expr(defn.expr);
         writeln!(self.dest, "    pop rax").unwrap();
-        match defn.var {
-            Var::Global(name) => {
-                writeln!(self.dest, "    mov [rip+{}], rax", name).unwrap();
+        match *defn.var.borrow() {
+            Var::Global(ref name) => {
+                writeln!(self.dest, "    mov [rip+{}], rax", name.clone()).unwrap();
             },
             Var::Local(offset, is_free) => {
                 writeln!(self.dest, "    mov QWORD PTR [rbp-{}], rax", offset).unwrap();
@@ -227,9 +227,9 @@ impl CodeGen {
                 writeln!(self.dest, "    push rax").unwrap();
             },
             Expr::Var(var) => {
-                match var {
-                    Var::Global(name) => {
-                        writeln!(self.dest, "    mov rax, [rip+{}]", name).unwrap();
+                match *var.borrow() {
+                    Var::Global(ref name) => {
+                        writeln!(self.dest, "    mov rax, [rip+{}]", name.clone()).unwrap();
                         writeln!(self.dest, "    push rax").unwrap();
                     },
                     Var::Local(offset, is_free) => {
