@@ -170,7 +170,6 @@ impl CodeGen {
             match expr {
                 Node::Defn(defn) => self.gen_defn(defn, &proc.free_vars),
                 Node::Expr(expr) => self.gen_expr(expr, &proc.free_vars),
-                _ => {},
             }
         }
 
@@ -184,31 +183,6 @@ impl CodeGen {
         match node {
             Node::Defn(defn) => self.gen_defn(defn, &FVs::new()),
             Node::Expr(expr) => self.gen_expr(expr, &FVs::new()),
-            Node::Lambda { args_num, body } => {
-                let id = self.lambda_num;
-                self.lambda_num += 1;
-                writeln!(self.dest, "_{}:", id).unwrap();
-                writeln!(self.dest, "    push rbp").unwrap();
-                writeln!(self.dest, "    mov rbp, rsp").unwrap();
-                writeln!(self.dest, "    sub rsp, {}", 8 * args_num).unwrap();
-
-                for i in 1..args_num + 1 {
-                    writeln!(self.dest, "    mov rax, QWORD PTR [rbp+{}]", 8 * (i + 1)).unwrap();
-                    writeln!(self.dest, "    mov QWORD PTR [rbp-{}], rax", 8 * i).unwrap();
-                }
-
-                for expr in body {
-                    match expr {
-                        Node::Defn(defn) => self.gen_defn(defn, &FVs::new()),
-                        Node::Expr(expr) => self.gen_expr(expr, &FVs::new()),
-                        _ => {},
-                    }
-                }
-
-                writeln!(self.dest, "    mov rsp, rbp").unwrap();
-                writeln!(self.dest, "    pop rbp").unwrap();
-                writeln!(self.dest, "    ret").unwrap();
-            },
         }
     }
 

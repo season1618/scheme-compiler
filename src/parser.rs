@@ -13,7 +13,6 @@ use Var::*;
 pub enum Node {
     Defn(Defn),
     Expr(Expr),
-    Lambda { args_num: usize, body: Vec<Node> },
 }
 
 #[derive(Debug, Clone)]
@@ -36,11 +35,6 @@ pub enum Expr {
 pub enum Var {
     Global(String),
     Local(String, usize, bool),
-}
-
-#[derive(Debug, Clone)]
-pub struct GlobalDef {
-    name: String,
 }
 
 #[derive(Debug, Clone)]
