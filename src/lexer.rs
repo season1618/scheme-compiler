@@ -10,7 +10,7 @@ pub enum Token {
     Period,
 }
 
-const OPERATORS: [char; 8] = ['=', '!', '<', '>', '+', '-', '*', '/'];
+const OPERATORS: [char; 9] = ['=', '!', '<', '>', '+', '-', '*', '/', '_'];
 
 fn is_operator(c: char) -> bool {
     for operator in OPERATORS {

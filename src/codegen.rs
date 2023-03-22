@@ -27,7 +27,7 @@ impl CodeGen {
 
         writeln!(self.dest, ".data").unwrap();
 
-        for global in parser.env.vec {
+        for global in parser.env.globals() {
             writeln!(self.dest, "{}:", global.0).unwrap();
             writeln!(self.dest, "    .zero 8").unwrap();
         }

@@ -48,47 +48,50 @@ pub struct Lambda {
 
 #[derive(Debug)]
 pub struct Env {
-    pub vec: Vec<(String, Var)>,
-    offset: usize,
+    pub vec: Vec<Vec<(String, Var)>>,
 }
 
 impl Env {
     fn new() -> Self {
-        Env {
-            vec: Vec::new(),
-            offset: 0,
-        }
+        Env { vec: vec![Vec::new()] }
     }
 
-    fn offset(&self) -> usize {
-        self.offset
+    fn local_num(&self) -> usize {
+        self.vec.last().unwrap().len()
+    }
+
+    pub fn globals(&self) -> &Vec<(String, Var)> {
+        &self.vec[0]
     }
 
     fn last(&self) -> Var {
-        self.vec.last().unwrap().clone().1
+        self.vec.last().unwrap().last().unwrap().clone().1
+    }
+
+    fn push_frame(&mut self) {
+        self.vec.push(Vec::new());
     }
 
     fn push_global(&mut self, name: String) {
         let name2 = name.clone();
-        self.vec.push((name, Var::Global(name2)));
+        self.vec[0].push((name, Var::Global(name2)));
     }
     fn push_local(&mut self, name: String) {
-        self.offset += 8;
-        self.vec.push((name, Var::Local(self.offset)));
+        let offset = (self.vec.last().unwrap().len() + 1) * 8;
+        self.vec.last_mut().unwrap().push((name, Var::Local(offset)));
     }
 
-    fn pop(&mut self) {
-        match self.vec.last().unwrap().1 {
-            Global(_) => {},
-            Local(_) => { self.offset -= 8; },
-        }
+    fn pop_frame(&mut self) {
         self.vec.pop();
     }
 
     fn find(&self, name: String) -> Option<Var> {
-        for var in &self.vec {
-            if var.0 == name {
-                return Some(var.1.clone());
+        for i in (0..self.vec.len()).rev() {
+            let frame = &self.vec[i];
+            for var in frame {
+                if var.0 == name {
+                    return Some(var.1.clone());
+                }
             }
         }
         None
@@ -220,7 +223,8 @@ impl Parser {
                 self.pos += 1;
 
                 if self.expect("lambda") {
-                    let begin_offset = self.env.offset();
+                    self.env.push_frame();
+                    // let begin_offset = self.env.offset();
                     let mut args_num = 0;
                     self.consume("(");
                     while let Ident(ref ident) = self.token_list[self.pos] {
@@ -237,12 +241,14 @@ impl Parser {
 
                     self.consume(")");
 
-                    let end_offset = self.env.offset();
-                    let local_num = (end_offset - begin_offset) / 8;
+                    // let end_offset = self.env.offset();
+                    // let local_num = (end_offset - begin_offset) / 8;
+                    let local_num = self.env.local_num();
+                    self.env.pop_frame();
 
-                    for _ in 0..local_num {
-                        self.env.pop();
-                    }
+                    // for _ in 0..local_num {
+                    //     self.env.pop();
+                    // }
     
                     let id = self.proc_list.len();
                     self.proc_list.push(Lambda { args_num, local_num, body });
