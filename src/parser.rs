@@ -35,7 +35,7 @@ pub enum Expr {
 #[derive(Debug, Clone)]
 pub enum Var {
     Global(String),
-    Local(usize, bool),
+    Local(String, usize, bool),
 }
 
 #[derive(Debug, Clone)]
@@ -83,7 +83,7 @@ impl Env {
     }
     fn push_local(&mut self, name: String) {
         let offset = (self.vec.last().unwrap().len() + 1) * 8;
-        self.vec.last_mut().unwrap().push((name, Rc::new(RefCell::new(Var::Local(offset, false)))));
+        self.vec.last_mut().unwrap().push((name.clone(), Rc::new(RefCell::new(Var::Local(name.clone(), offset, false)))));
     }
 
     fn pop_frame(&mut self) {
@@ -96,7 +96,7 @@ impl Env {
             for var in frame {
                 if var.0 == name {
                     match *var.1.borrow_mut() {
-                        Local(_, ref mut is_free) => {
+                        Local(_, _, ref mut is_free) => {
                             *is_free = 0 < i && i < self.vec.len() - 1;
                         },
                         _ => {},
@@ -113,8 +113,8 @@ impl Env {
             let frame = &self.vec[i];
             for var in frame {
                 if var.0 == name {
-                    match *var.1.borrow_mut() {
-                        Local(offset, is_free) if is_free => {
+                    match *var.1.borrow() {
+                        Local(_, offset, is_free) if is_free => {
                             return Some((i, offset, name.clone()));
                         },
                         _ => {},
@@ -132,7 +132,7 @@ pub struct FVs {
 }
 
 impl FVs {
-    fn new() -> Self {
+    pub fn new() -> Self {
         FVs { set: HashSet::new() }
     }
 
@@ -148,13 +148,13 @@ impl FVs {
         self.set.insert(fv);
     }
 
-    fn find(&self, name: String) -> Option<usize> {
+    pub fn offset(&self, name: String) -> usize {
         for (i, fv) in self.set.iter().enumerate() {
             if fv.2 == name {
-                return Some(8 * i);
+                return 8 * (i + 1);
             }
         }
-        None
+        panic!("{} is not found", name);
     }
 }
 
@@ -266,7 +266,7 @@ impl Parser {
                 match self.env.find(ident.clone()) {
                     Some(var) => {
                         match *var.borrow() {
-                            Local(_, is_free) if is_free => {
+                            Local(_, _, is_free) if is_free => {
                                 fv.insert(self.env.find_fv(ident.clone()).unwrap());
                             },
                             _ => {},

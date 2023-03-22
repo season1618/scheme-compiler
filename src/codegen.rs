@@ -148,14 +148,15 @@ impl CodeGen {
     }
 
     fn gen_proc(&mut self, proc: Lambda) {
+        let fv_num = proc.free_vars.len();
+
         let id = self.lambda_num;
         self.lambda_num += 1;
         writeln!(self.dest, "_{}:", id).unwrap();
         writeln!(self.dest, "    push rbp").unwrap();
         writeln!(self.dest, "    mov rbp, rsp").unwrap();
-        writeln!(self.dest, "    sub rsp, {}", 8 * proc.local_num).unwrap();
+        writeln!(self.dest, "    sub rsp, {}", 8 * (fv_num + proc.local_num)).unwrap();
 
-        let fv_num = proc.free_vars.len();
         for i in 1..fv_num + 1 {
             writeln!(self.dest, "    mov rax, QWORD PTR [rbp+{}]", 8 * (i + 1)).unwrap();
             writeln!(self.dest, "    mov QWORD PTR [rbp-{}], rax", 8 * i).unwrap();
@@ -167,8 +168,8 @@ impl CodeGen {
 
         for expr in proc.body {
             match expr {
-                Node::Defn(defn) => self.gen_defn(defn),
-                Node::Expr(expr) => self.gen_expr(expr),
+                Node::Defn(defn) => self.gen_defn(defn, &proc.free_vars),
+                Node::Expr(expr) => self.gen_expr(expr, &proc.free_vars),
                 _ => {},
             }
         }
@@ -181,8 +182,8 @@ impl CodeGen {
 
     fn gen_node(&mut self, node: Node) {
         match node {
-            Node::Defn(defn) => self.gen_defn(defn),
-            Node::Expr(expr) => self.gen_expr(expr),
+            Node::Defn(defn) => self.gen_defn(defn, &FVs::new()),
+            Node::Expr(expr) => self.gen_expr(expr, &FVs::new()),
             Node::Lambda { args_num, body } => {
                 let id = self.lambda_num;
                 self.lambda_num += 1;
@@ -198,8 +199,8 @@ impl CodeGen {
 
                 for expr in body {
                     match expr {
-                        Node::Defn(defn) => self.gen_defn(defn),
-                        Node::Expr(expr) => self.gen_expr(expr),
+                        Node::Defn(defn) => self.gen_defn(defn, &FVs::new()),
+                        Node::Expr(expr) => self.gen_expr(expr, &FVs::new()),
                         _ => {},
                     }
                 }
@@ -211,15 +212,16 @@ impl CodeGen {
         }
     }
 
-    fn gen_defn(&mut self, defn: Defn) {
-        self.gen_expr(defn.expr);
+    fn gen_defn(&mut self, defn: Defn, free_vars: &FVs) {
+        let fv_num = free_vars.len();
+        self.gen_expr(defn.expr, free_vars);
         
         match *defn.var.borrow() {
             Var::Global(ref name) => {
                 writeln!(self.dest, "    pop rax").unwrap();
                 writeln!(self.dest, "    mov [rip+{}], rax", name.clone()).unwrap();
             },
-            Var::Local(offset, is_free) => {
+            Var::Local(_, offset, is_free) => {
                 if is_free {
                     writeln!(self.dest, "    mov rdi, 1").unwrap();
                     writeln!(self.dest, "    mov rsi, 8").unwrap();
@@ -229,17 +231,17 @@ impl CodeGen {
                 } else {
                     writeln!(self.dest, "    pop rax").unwrap();
                 }
-                writeln!(self.dest, "    mov QWORD PTR [rbp-{}], rax", offset).unwrap();
+                writeln!(self.dest, "    mov QWORD PTR [rbp-{}], rax", 8 * fv_num + offset).unwrap();
             },
         }
     }
 
-    fn gen_expr(&mut self, expr: Expr) {
+    fn gen_expr(&mut self, expr: Expr, free_vars: &FVs) {
         match expr {
             Expr::Int(val) => {
                 writeln!(self.dest, "    push {}", val).unwrap();
             },
-            Expr::Proc(name, free_vars) => {
+            Expr::Proc(name, fvs) => {
                 writeln!(self.dest, "    mov rdi, 2").unwrap();
                 writeln!(self.dest, "    mov rsi, 8").unwrap();
                 writeln!(self.dest, "    call calloc").unwrap();
@@ -248,15 +250,15 @@ impl CodeGen {
                 writeln!(self.dest, "    mov [rax], rdi").unwrap();
                 writeln!(self.dest, "    mov QWORD PTR [rax+8], 0").unwrap();
 
-                for (_, offset, _) in free_vars.iter() {
+                for (_, offset, name) in fvs.iter() {
                     writeln!(self.dest, "    push rax").unwrap();
 
                     writeln!(self.dest, "    mov rdi, 2").unwrap();
                     writeln!(self.dest, "    mov rsi, 8").unwrap();
                     writeln!(self.dest, "    call calloc").unwrap();
 
-                    writeln!(self.dest, "    mov rdi [rbp-{}]", 8 * offset).unwrap();
-                    writeln!(self.dest, "    mov rdi, [rdi]").unwrap();
+                    writeln!(self.dest, "    mov rdi, [rbp-{}]", offset /* free_vars.offset(name.clone()) */).unwrap();
+                    // writeln!(self.dest, "    mov rdi, [rdi]").unwrap();
                     writeln!(self.dest, "    pop rsi").unwrap();
                     writeln!(self.dest, "    mov [rax], rdi",).unwrap();
                     writeln!(self.dest, "    mov [rax+8], rsi").unwrap();
@@ -270,12 +272,14 @@ impl CodeGen {
                         writeln!(self.dest, "    mov rax, [rip+{}]", name.clone()).unwrap();
                         writeln!(self.dest, "    push rax").unwrap();
                     },
-                    Var::Local(offset, is_free) => {
-                        if is_free {
-                            writeln!(self.dest, "    mov rax, QWORD PTR [rbp-{}]", offset).unwrap();
-                            writeln!(self.dest, "    push [rax]").unwrap();
+                    Var::Local(ref name, offset, is_free) => {
+                        let fv_num = free_vars.len();
+                        if is_free { //
+                            writeln!(self.dest, "    push QWORD PTR [rbp-{}]", free_vars.offset(name.clone())).unwrap();
+                            // writeln!(self.dest, "    mov rax, QWORD PTR [rbp-{}]", free_vars.offset(name.clone())).unwrap();
+                            // writeln!(self.dest, "    push [rax]").unwrap();
                         } else {
-                            writeln!(self.dest, "    push QWORD PTR [rbp-{}]", offset).unwrap();
+                            writeln!(self.dest, "    push QWORD PTR [rbp-{}]", 8 * fv_num + offset).unwrap();
                         }
                     },
                 }
@@ -283,10 +287,10 @@ impl CodeGen {
             Expr::Call { proc, params } => {
                 let params_num = params.len();
                 for param in params.into_iter().rev() {
-                    self.gen_expr(param);
+                    self.gen_expr(param, free_vars);
                 }
 
-                self.gen_expr((*proc).clone());
+                self.gen_expr((*proc).clone(), free_vars);
                 writeln!(self.dest, "    pop rax").unwrap();
 
                 let call_num = self.call_num;
@@ -296,7 +300,7 @@ impl CodeGen {
                 writeln!(self.dest, "    cmp rax, 0").unwrap();
                 writeln!(self.dest, "    je end{}", call_num).unwrap();
 
-                writeln!(self.dest, "    push [rax]").unwrap();
+                writeln!(self.dest, "    push [rax]").unwrap(); //
                 writeln!(self.dest, "    mov rax, [rax+8]").unwrap();
                 writeln!(self.dest, "    jmp begin{}", call_num).unwrap();
 
@@ -313,18 +317,18 @@ impl CodeGen {
                 let label2 = self.if_num + 1;
                 self.if_num += 2;
 
-                self.gen_expr((*test).clone());
+                self.gen_expr((*test).clone(), free_vars);
 
                 writeln!(self.dest, "    pop rax").unwrap();
                 writeln!(self.dest, "    cmp rax, 0").unwrap();
                 writeln!(self.dest, "    je .L{}", label1).unwrap();
 
-                self.gen_expr((*conseq).clone());
+                self.gen_expr((*conseq).clone(), free_vars);
                 writeln!(self.dest, "    jmp .L{}", label2).unwrap();
 
                 writeln!(self.dest, ".L{}:", label1).unwrap();
 
-                self.gen_expr((*alter).clone());
+                self.gen_expr((*alter).clone(), free_vars);
 
                 writeln!(self.dest, ".L{}:", label2).unwrap();
             }
