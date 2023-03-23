@@ -231,7 +231,14 @@ impl CodeGen {
                     writeln!(self.dest, "    mov rsi, 8").unwrap();
                     writeln!(self.dest, "    call calloc").unwrap();
 
-                    writeln!(self.dest, "    mov rdi, [rbp-{}]", offset /* free_vars.offset(name.clone()) */).unwrap();
+                    if free_vars.include(name.clone()) {
+                        writeln!(self.dest, "    mov rdi, [rbp-{}]", free_vars.offset(name.clone())).unwrap();
+                    } else {
+                        let fv_num = free_vars.len();
+                        writeln!(self.dest, "    mov rdi, [rbp-{}]", fv_num + offset).unwrap();
+                    }
+
+                    // writeln!(self.dest, "    mov rdi, [rbp-{}]", /*offset*/  free_vars.offset(name.clone())).unwrap();
                     // writeln!(self.dest, "    mov rdi, [rdi]").unwrap();
                     writeln!(self.dest, "    pop rsi").unwrap();
                     writeln!(self.dest, "    mov [rax], rdi",).unwrap();

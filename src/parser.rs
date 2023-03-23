@@ -118,6 +118,18 @@ impl Env {
         }
         None
     }
+
+    fn is_free(&self, name: String) -> bool {
+        for i in (0..self.vec.len()).rev() {
+            let frame = &self.vec[i];
+            for var in frame {
+                if var.0 == name {
+                    return 0 < i && i < self.vec.len() - 1;
+                }
+            }
+        }
+        false
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -149,6 +161,15 @@ impl FVs {
             }
         }
         panic!("{} is not found", name);
+    }
+
+    pub fn include(&self, name: String) -> bool {
+        for (i, fv) in self.set.iter().enumerate() {
+            if fv.2 == name {
+                return true;
+            }
+        }
+        false
     }
 }
 
@@ -306,6 +327,13 @@ impl Parser {
 
                     let local_num = self.env.local_num();
                     self.env.pop_frame();
+
+                    for (_, _, name) in next_fv.iter() {
+                        if self.env.is_free(name.clone()) {
+                            let free_var = self.env.find_fv(name.clone()).unwrap();
+                            fv.insert(free_var.clone());
+                        }
+                    }
     
                     let id = self.proc_list.len();
                     self.proc_list.push(Lambda { free_vars: next_fv.clone(), args_num, local_num, body });
