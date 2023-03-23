@@ -148,22 +148,20 @@ impl CodeGen {
     }
 
     fn gen_proc(&mut self, proc: Lambda) {
-        let fv_num = proc.free_vars.len();
-
         let id = self.lambda_num;
         self.lambda_num += 1;
         writeln!(self.dest, "_{}:", id).unwrap();
         writeln!(self.dest, "    push rbp").unwrap();
         writeln!(self.dest, "    mov rbp, rsp").unwrap();
-        writeln!(self.dest, "    sub rsp, {}", 8 * (fv_num + proc.local_num)).unwrap();
+        writeln!(self.dest, "    sub rsp, {}", 8 * (proc.free_num + proc.local_num)).unwrap();
 
-        for i in 1..fv_num + 1 {
+        for i in 1..proc.free_num + 1 {
             writeln!(self.dest, "    mov rax, QWORD PTR [rbp+{}]", 8 * (i + 1)).unwrap();
             writeln!(self.dest, "    mov QWORD PTR [rbp-{}], rax", 8 * i).unwrap();
         }
         for i in 1..proc.args_num + 1 {
-            writeln!(self.dest, "    mov rax, QWORD PTR [rbp+{}]", 8 * (fv_num + i + 1)).unwrap();
-            writeln!(self.dest, "    mov QWORD PTR [rbp-{}], rax", 8 * (fv_num + i)).unwrap();
+            writeln!(self.dest, "    mov rax, QWORD PTR [rbp+{}]", 8 * (proc.free_num + i + 1)).unwrap();
+            writeln!(self.dest, "    mov QWORD PTR [rbp-{}], rax", 8 * (proc.free_num + i)).unwrap();
         }
 
         for expr in proc.body {
@@ -224,7 +222,7 @@ impl CodeGen {
                 writeln!(self.dest, "    mov [rax], rdi").unwrap();
                 writeln!(self.dest, "    mov QWORD PTR [rax+8], 0").unwrap();
 
-                for (_, offset, name) in fvs.iter() {
+                for (offset, name) in fvs.iter() {
                     writeln!(self.dest, "    push rax").unwrap();
 
                     writeln!(self.dest, "    mov rdi, 2").unwrap();

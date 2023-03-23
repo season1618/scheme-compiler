@@ -40,6 +40,7 @@ pub enum Var {
 #[derive(Debug, Clone)]
 pub struct Lambda {
     pub free_vars: FVs,
+    pub free_num: usize,
     pub args_num: usize,
     pub local_num: usize,
     pub body: Vec<Node>,
@@ -102,14 +103,14 @@ impl Env {
         None
     }
 
-    fn find_fv(&mut self, name: String) -> Option<(usize, usize, String)> {
+    fn find_fv(&mut self, name: String) -> Option<(usize, String)> {
         for i in (0..self.vec.len()).rev() {
             let frame = &self.vec[i];
             for var in frame {
                 if var.0 == name {
                     match *var.1.borrow() {
                         Local(_, offset, is_free) if is_free => {
-                            return Some((i, offset, name.clone()));
+                            return Some((offset, name.clone()));
                         },
                         _ => {},
                     }
@@ -134,7 +135,7 @@ impl Env {
 
 #[derive(Debug, Clone)]
 pub struct FVs {
-    pub set: HashSet<(usize, usize, String)>,
+    pub set: HashSet<(usize, String)>,
 }
 
 impl FVs {
@@ -146,17 +147,17 @@ impl FVs {
         self.set.len()
     }
 
-    pub fn iter(&self) -> Iter<'_, (usize, usize, String)> {
+    pub fn iter(&self) -> Iter<'_, (usize, String)> {
         self.set.iter()
     }
 
-    fn insert(&mut self, fv: (usize, usize, String)) {
+    fn insert(&mut self, fv: (usize, String)) {
         self.set.insert(fv);
     }
 
     pub fn offset(&self, name: String) -> usize {
         for (i, fv) in self.set.iter().enumerate() {
-            if fv.2 == name {
+            if fv.1 == name {
                 return 8 * (i + 1);
             }
         }
@@ -165,7 +166,7 @@ impl FVs {
 
     pub fn include(&self, name: String) -> bool {
         for (i, fv) in self.set.iter().enumerate() {
-            if fv.2 == name {
+            if fv.1 == name {
                 return true;
             }
         }
@@ -325,10 +326,11 @@ impl Parser {
 
                     self.consume(")");
 
+                    let free_num = next_fv.len();
                     let local_num = self.env.local_num();
                     self.env.pop_frame();
 
-                    for (_, _, name) in next_fv.iter() {
+                    for (_, name) in next_fv.iter() {
                         if self.env.is_free(name.clone()) {
                             let free_var = self.env.find_fv(name.clone()).unwrap();
                             fv.insert(free_var.clone());
@@ -336,7 +338,7 @@ impl Parser {
                     }
     
                     let id = self.proc_list.len();
-                    self.proc_list.push(Lambda { free_vars: next_fv.clone(), args_num, local_num, body });
+                    self.proc_list.push(Lambda { free_vars: next_fv.clone(), free_num, args_num, local_num, body });
                     return Expr::Proc(format!("_{}", id), next_fv);
                 }
 
