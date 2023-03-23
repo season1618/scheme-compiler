@@ -97,7 +97,6 @@ impl Env {
                         if 0 < i && i < self.vec.len() - 1 {
                             is_free = true;
                             offset = offset_;
-                            // *var.1.borrow_mut() = Free(name.clone(), offset);
                         }
                     }
                     if is_free {
@@ -115,11 +114,8 @@ impl Env {
             let frame = &self.vec[i];
             for var in frame {
                 if var.0 == name {
-                    match *var.1.borrow() {
-                        Free(_, offset) => {
-                            return Some((offset, name.clone()));
-                        },
-                        _ => {},
+                    if let Free(_, offset) = *var.1.borrow() {
+                        return Some((offset, name.clone()));
                     }
                 }
             }
@@ -288,11 +284,8 @@ impl Parser {
                 
                 match self.env.find(ident.clone()) {
                     Some(var) => {
-                        match *var.borrow() {
-                            Free(_, _) => {
-                                fv.insert(self.env.find_fv(ident.clone()).unwrap());
-                            },
-                            _ => {},
+                        if let Free(_, _) = *var.borrow() {
+                            fv.insert(self.env.find_fv(ident.clone()).unwrap());
                         }
                         Expr::Var(var)
                     },

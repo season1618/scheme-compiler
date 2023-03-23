@@ -210,6 +210,9 @@ impl CodeGen {
 
     fn gen_expr(&mut self, expr: Expr, free_vars: &FVs) {
         match expr {
+            Expr::Bool(val) => {
+                writeln!(self.dest, "    push {}", if val { 1 } else { 0 });
+            },
             Expr::Int(val) => {
                 writeln!(self.dest, "    push {}", val).unwrap();
             },
@@ -309,8 +312,7 @@ impl CodeGen {
                 self.gen_expr((*alter).clone(), free_vars);
 
                 writeln!(self.dest, ".L{}:", label2).unwrap();
-            }
-            _ => {},
+            },
         }
     }
 }
