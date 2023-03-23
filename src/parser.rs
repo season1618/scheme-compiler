@@ -34,7 +34,8 @@ pub enum Expr {
 #[derive(Debug, Clone)]
 pub enum Var {
     Global(String),
-    Local(String, usize, bool),
+    Free(String, usize),
+    Local(String, usize),
 }
 
 #[derive(Debug, Clone)]
@@ -78,7 +79,7 @@ impl Env {
     }
     fn push_local(&mut self, name: String) {
         let offset = (self.vec.last().unwrap().len() + 1) * 8;
-        self.vec.last_mut().unwrap().push((name.clone(), Rc::new(RefCell::new(Var::Local(name.clone(), offset, false)))));
+        self.vec.last_mut().unwrap().push((name.clone(), Rc::new(RefCell::new(Var::Local(name.clone(), offset)))));
     }
 
     fn pop_frame(&mut self) {
@@ -90,11 +91,17 @@ impl Env {
             let frame = &self.vec[i];
             for var in frame {
                 if var.0 == name {
-                    match *var.1.borrow_mut() {
-                        Local(_, _, ref mut is_free) => {
-                            *is_free = 0 < i && i < self.vec.len() - 1;
-                        },
-                        _ => {},
+                    let mut is_free = false;
+                    let mut offset = 0;
+                    if let Local(_, offset_) = *var.1.borrow() {
+                        if 0 < i && i < self.vec.len() - 1 {
+                            is_free = true;
+                            offset = offset_;
+                            // *var.1.borrow_mut() = Free(name.clone(), offset);
+                        }
+                    }
+                    if is_free {
+                        *var.1.borrow_mut() = Free(name.clone(), offset);
                     }
                     return Some(var.1.clone());
                 }
@@ -109,7 +116,7 @@ impl Env {
             for var in frame {
                 if var.0 == name {
                     match *var.1.borrow() {
-                        Local(_, offset, is_free) if is_free => {
+                        Free(_, offset) => {
                             return Some((offset, name.clone()));
                         },
                         _ => {},
@@ -282,7 +289,7 @@ impl Parser {
                 match self.env.find(ident.clone()) {
                     Some(var) => {
                         match *var.borrow() {
-                            Local(_, _, is_free) if is_free => {
+                            Free(_, _) => {
                                 fv.insert(self.env.find_fv(ident.clone()).unwrap());
                             },
                             _ => {},

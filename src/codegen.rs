@@ -193,16 +193,16 @@ impl CodeGen {
                 writeln!(self.dest, "    pop rax").unwrap();
                 writeln!(self.dest, "    mov [rip+{}], rax", name.clone()).unwrap();
             },
-            Var::Local(_, offset, is_free) => {
-                if is_free {
-                    writeln!(self.dest, "    mov rdi, 1").unwrap();
-                    writeln!(self.dest, "    mov rsi, 8").unwrap();
-                    writeln!(self.dest, "    call calloc").unwrap();
-                    writeln!(self.dest, "    pop rdi").unwrap();
-                    writeln!(self.dest, "    mov QWORD PTR [rax], rdi").unwrap();
-                } else {
-                    writeln!(self.dest, "    pop rax").unwrap();
-                }
+            Var::Free(_, offset) => {
+                writeln!(self.dest, "    mov rdi, 1").unwrap();
+                writeln!(self.dest, "    mov rsi, 8").unwrap();
+                writeln!(self.dest, "    call calloc").unwrap();
+                writeln!(self.dest, "    pop rdi").unwrap();
+                writeln!(self.dest, "    mov QWORD PTR [rax], rdi").unwrap();
+                writeln!(self.dest, "    mov QWORD PTR [rbp-{}], rax", 8 * fv_num + offset).unwrap();
+            },
+            Var::Local(_, offset) => {
+                writeln!(self.dest, "    pop rax").unwrap();
                 writeln!(self.dest, "    mov QWORD PTR [rbp-{}], rax", 8 * fv_num + offset).unwrap();
             },
         }
@@ -251,15 +251,14 @@ impl CodeGen {
                         writeln!(self.dest, "    mov rax, [rip+{}]", name.clone()).unwrap();
                         writeln!(self.dest, "    push rax").unwrap();
                     },
-                    Var::Local(ref name, offset, is_free) => {
+                    Var::Free(ref name, _) => {
+                        writeln!(self.dest, "    push QWORD PTR [rbp-{}]", free_vars.offset(name.clone())).unwrap();
+                        // writeln!(self.dest, "    mov rax, QWORD PTR [rbp-{}]", free_vars.offset(name.clone())).unwrap();
+                        // writeln!(self.dest, "    push [rax]").unwrap();
+                    },
+                    Var::Local(_, offset) => {
                         let fv_num = free_vars.len();
-                        if is_free { //
-                            writeln!(self.dest, "    push QWORD PTR [rbp-{}]", free_vars.offset(name.clone())).unwrap();
-                            // writeln!(self.dest, "    mov rax, QWORD PTR [rbp-{}]", free_vars.offset(name.clone())).unwrap();
-                            // writeln!(self.dest, "    push [rax]").unwrap();
-                        } else {
-                            writeln!(self.dest, "    push QWORD PTR [rbp-{}]", 8 * fv_num + offset).unwrap();
-                        }
+                        writeln!(self.dest, "    push QWORD PTR [rbp-{}]", 8 * fv_num + offset).unwrap();
                     },
                 }
             },
